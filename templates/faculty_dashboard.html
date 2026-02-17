@@ -1,0 +1,1965 @@
+{% extends "base.html" %}
+
+{% block title %}Faculty Dashboard - Exam Duty System{% endblock %}
+
+{% block navbar %}
+<nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+    <div class="container">
+        <a class="navbar-brand" href="#">Exam Duty System</a>
+        <div class="navbar-nav ms-auto">
+            <a class="nav-link active" href="{{ url_for('faculty_dashboard') }}">My Duties</a>
+            <a class="nav-link" href="{{ url_for('faculty_notifications') }}">Notifications</a>
+            <a class="nav-link" href="{{ url_for('faculty_profile') }}">Profile</a>
+            <a class="nav-link" href="{{ url_for('logout') }}">Logout</a>
+        </div>
+    </div>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div class="d-flex align-items-center">
+        <div class="position-relative" style="cursor: pointer;" onclick="showUploadPhotoModal()">
+            <!-- FIXED: Use profile_image_url if available, otherwise fallback -->
+            {% if profile_image_url %}
+            <img src="{{ profile_image_url }}" alt="Profile Picture" class="rounded-circle me-3 profile-image"
+                id="dashboardProfileImage" style="width: 60px; height: 60px; object-fit: cover;">
+            {% else %}
+            <img src="{{ url_for('static', filename='profile_pics/' + (current_user.profile_image or 'default.png')) }}?t={{ current_time }}"
+                alt="Profile Picture" class="rounded-circle me-3 profile-image" id="dashboardProfileImage"
+                style="width: 60px; height: 60px; object-fit: cover;">
+            {% endif %}
+            <div class="position-absolute bottom-0 end-0 bg-primary rounded-circle p-1">
+                <i class="fas fa-camera text-white" style="font-size: 12px;"></i>
+            </div>
+        </div>
+        <div>
+            <h1>Welcome, {{ current_user.name }}</h1>
+            <p class="text-muted mb-0">{{ current_user.faculty_id }} | {{ current_user.department }}</p>
+        </div>
+    </div>
+    <div>
+        <button class="btn btn-outline-primary me-2" onclick="showUploadPhotoModal()">
+            <i class="fas fa-camera"></i> Change Photo
+        </button>
+        <a href="{{ url_for('faculty_profile') }}" class="btn btn-outline-primary">
+            <i class="fas fa-user-edit"></i> Edit Profile
+        </a>
+        <button class="btn btn-warning ms-2" data-bs-toggle="modal" data-bs-target="#swapRequestsModal">
+            <i class="fas fa-exchange-alt"></i> Duty Swaps
+            <span id="swapNotificationBadge" class="badge bg-danger d-none">0</span>
+        </button>
+    </div>
+</div>
+
+<!-- Success/Error Messages -->
+<div id="flashMessages"></div>
+
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card text-white bg-primary">
+            <div class="card-body">
+                <h4 class="card-title">{{ total_duties }}</h4>
+                <p class="card-text">Total Duties</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-white bg-success">
+            <div class="card-body">
+                <h4 class="card-title">{{ accepted_duties }}</h4>
+                <p class="card-text">Accepted</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-white bg-danger">
+            <div class="card-body">
+                <h4 class="card-title">{{ declined_duties }}</h4>
+                <p class="card-text">Declined</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-white bg-warning">
+            <div class="card-body">
+                <h4 class="card-title">{{ pending_duties }}</h4>
+                <p class="card-text">Pending</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <ul class="nav nav-tabs card-header-tabs" id="myTab" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="duties-tab" data-bs-toggle="tab" data-bs-target="#duties"
+                            type="button" role="tab">My Exam Duties</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="timetable-tab" data-bs-toggle="tab" data-bs-target="#timetable"
+                            type="button" role="tab" onclick="loadTimetable()">📅 My Timetable</button>
+                    </li>
+                </ul>
+            </div>
+            <div class="card-body">
+                <div class="tab-content" id="myTabContent">
+                    <!-- Duties Tab -->
+                    <div class="tab-pane fade show active" id="duties" role="tabpanel">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h5 class="mb-0">Upcoming Duties</h5>
+                            <button class="btn btn-sm btn-info" onclick="refreshDuties()">
+                                <i class="fas fa-sync-alt"></i> Refresh
+                            </button>
+                        </div>
+
+                        {% if duties %}
+                        <div class="table-responsive">
+                            <table class="table table-striped">
+                                <thead>
+                                    <tr>
+                                        <th>Date</th>
+                                        <th>Subject</th>
+                                        <th>Semester</th>
+                                        <th>Time</th>
+                                        <th>Hall</th>
+                                        <th>Status</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for duty in duties %}
+                                    <tr>
+                                        <td>{{ duty.exam.exam_date }}</td>
+                                        <td>{{ duty.exam.subject_name }} ({{ duty.exam.subject_code }})</td>
+                                        <td>{{ duty.exam.semester }}</td>
+                                        <td>{{ duty.exam.start_time }} - {{ duty.exam.end_time }}</td>
+                                        <td>{{ duty.exam.hall }}</td>
+                                        <td>
+                                            <span
+                                                class="badge bg-{{ 'success' if duty.status == 'Accepted' else 'danger' if duty.status == 'Declined' else 'warning' }}">
+                                                {{ duty.status }}
+                                            </span>
+                                        </td>
+                                        <td>
+                                            {% if duty.status == 'Assigned' or duty.status == 'Pending' %}
+                                            <div class="btn-group btn-group-sm">
+                                                <a href="#accept-duty" class="btn btn-success"
+                                                    onclick="acceptDuty({{ duty.id }}, event)">Accept</a>
+                                                <a href="#deny-duty" class="btn btn-danger"
+                                                    onclick="showDenyModal({{ duty.id }}, '{{ duty.exam.subject_name }}', event)">Deny</a>
+                                            </div>
+                                            {% elif duty.status == 'Accepted' %}
+                                            <div class="btn-group btn-group-sm">
+                                                <button class="btn btn-info btn-sm"
+                                                    onclick="showSwapModal('{{ duty.id }}')">
+                                                    <i class="fas fa-exchange-alt"></i> Swap
+                                                </button>
+                                            </div>
+                                            {% else %}
+                                            <span class="text-muted">No actions</span>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        {% else %}
+                        <div class="text-center py-4">
+                            <i class="fas fa-calendar-check fa-3x text-muted mb-3"></i>
+                            <p class="text-muted">No exam duties assigned yet.</p>
+                        </div>
+                        {% endif %}
+                    </div>
+
+                    <!-- Timetable Tab -->
+                    <div class="tab-pane fade" id="timetable" role="tabpanel">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h5 class="mb-0">My Weekly Availability</h5>
+                            <button class="btn btn-sm btn-primary" data-bs-toggle="modal"
+                                data-bs-target="#addTimetableModal">
+                                <i class="fas fa-plus"></i> Add Entry
+                            </button>
+                        </div>
+
+                        <div class="table-responsive">
+                            <table class="table table-bordered table-sm" id="timetableTable">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Day</th>
+                                        <th>Start Time</th>
+                                        <th>End Time</th>
+                                        <th>Subject/Activity</th>
+                                        <th>Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="timetableBody">
+                                    <tr>
+                                        <td colspan="5" class="text-center">Loading...</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="alert alert-info mt-2">
+                            <small><i class="fas fa-info-circle"></i> The system uses this timetable to avoid assigning
+                                exam duties during your busy hours.</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h5>Recent Notifications</h5>
+            </div>
+            <div class="card-body">
+                {% if notifications %}
+                <div class="notification-list" style="max-height: 300px; overflow-y: auto;">
+                    {% for notification in notifications %}
+                    <div
+                        class="notification mb-2 p-2 border rounded {{ 'bg-light' if notification.is_read else 'bg-white border-primary' }}">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <small class="text-muted d-block">{{ notification.created_at.strftime('%Y-%m-%d %H:%M')
+                                    }}</small>
+                                <p class="mb-0 mt-1">
+                                    {% if 'duty' in notification.message.lower() and 'assigned' in
+                                    notification.message.lower() %}
+                                    <strong>{{ notification.message.split('for')[0] }}</strong>
+                                    for {{ notification.message.split('for')[1] if 'for' in notification.message else
+                                    'duty' }}
+                                    {% else %}
+                                    {{ notification.message }}
+                                    {% endif %}
+                                </p>
+                            </div>
+                            {% if not notification.is_read %}
+                            <span class="badge bg-primary badge-dot"></span>
+                            {% endif %}
+                        </div>
+                        {% if 'duty' in notification.message.lower() and 'assigned' in notification.message.lower() %}
+                        {% set duty_id = notification.duty_id %}
+                        <div class="mt-2">
+                            {% if duty_id %}
+                            <div class="btn-group btn-group-sm">
+                                <a href="#accept-duty" class="btn btn-success btn-sm accept"
+                                    onclick="acceptDutyFromNotification({{ duty_id }}, '{{ notification.message }}', {{ notification.id }}, this, event)">Accept</a>
+                                <a href="#deny-duty" class="btn btn-danger btn-sm deny"
+                                    onclick="showDenyModal({{ duty_id }}, '{{ notification.message.split('for')[1] if 'for' in notification.message else 'duty' }}', event)">Deny</a>
+                                <a href="#mark-read" class="btn btn-secondary btn-sm"
+                                    onclick="markNotificationRead({{ notification.id }}, this, event)">Mark as Read</a>
+                            </div>
+                            {% else %}
+                            <a href="#mark-read" class="btn btn-secondary btn-sm"
+                                onclick="markNotificationRead({{ notification.id }}, this, event)">Mark as Read</a>
+                            {% endif %}
+                        </div>
+                        {% else %}
+                        <div class="mt-2">
+                            <a href="#mark-read" class="btn btn-secondary btn-sm"
+                                onclick="markNotificationRead({{ notification.id }}, this, event)">Mark as Read</a>
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+                <a href="{{ url_for('faculty_notifications') }}" class="btn btn-outline-primary btn-sm mt-3 w-100">
+                    <i class="fas fa-bell"></i> View All Notifications
+                </a>
+                {% else %}
+                <div class="text-center py-4">
+                    <i class="fas fa-bell-slash fa-3x text-muted mb-3"></i>
+                    <p class="text-muted">No notifications yet.</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Quick Swap Stats Card -->
+        <div class="card mt-4">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0">
+                    <i class="fas fa-exchange-alt me-2"></i>Swap Statistics
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="d-flex justify-content-between mb-2">
+                    <span>Pending Received:</span>
+                    <span class="badge bg-warning" id="pendingReceivedCount">0</span>
+                </div>
+                <div class="d-flex justify-content-between mb-2">
+                    <span>Pending Sent:</span>
+                    <span class="badge bg-info" id="pendingSentCount">0</span>
+                </div>
+                <div class="d-flex justify-content-between mb-2">
+                    <span>Total Accepted:</span>
+                    <span class="badge bg-success" id="acceptedSwapsCount">0</span>
+                </div>
+                <div class="d-flex justify-content-between">
+                    <span>Total Rejected:</span>
+                    <span class="badge bg-danger" id="rejectedSwapsCount">0</span>
+                </div>
+                <hr>
+                <button class="btn btn-outline-info btn-sm w-100" data-bs-toggle="modal"
+                    data-bs-target="#swapRequestsModal">
+                    <i class="fas fa-list"></i> View All Swap Requests
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- Modals included in content block -->
+
+<!-- Deny Duty Modal -->
+<div class="modal fade" id="denyDutyModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="denyModalTitle">Provide Reason for Denial</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="denyDutyId">
+                <div class="mb-3">
+                    <label for="denyReasonType" class="form-label">Reason Type:</label>
+                    <select class="form-select mb-3" id="denyReasonType" required>
+                        <option value="">Select a reason type...</option>
+                        <option value="Schedule Conflict">Schedule Conflict</option>
+                        <option value="Personal Reason">Personal Reason</option>
+                        <option value="Academic Commitment">Academic Commitment</option>
+                        <option value="Health Related">Health Related</option>
+                        <option value="Other">Other</option>
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label for="denyReason" class="form-label">Detailed Explanation:</label>
+                    <textarea class="form-control" id="denyReason" rows="4" required
+                        placeholder="Please provide specific details. This will be sent to the administrator for review."></textarea>
+                    <div class="form-text">Your explanation helps administrators better understand your situation and
+                        plan future assignments.</div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-danger" id="denySubmitBtn" onclick="denyDuty()">
+                    <span id="denyBtnText">Submit Rejection</span>
+                    <span id="denyBtnSpinner" class="spinner-border spinner-border-sm d-none" role="status"></span>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Accept Swap Request Modal -->
+<div class="modal fade" id="acceptSwapModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Accept Swap Request</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="acceptSwapId">
+                <div class="alert alert-success">
+                    <i class="fas fa-check-circle"></i>
+                    Are you sure you want to accept this swap request?
+                </div>
+                <div class="mb-3">
+                    <label for="acceptSwapReason" class="form-label">Response Note (Optional):</label>
+                    <textarea class="form-control" id="acceptSwapReason" rows="3"
+                        placeholder="You can add a note to the requester (optional)"></textarea>
+                    <div class="form-text">
+                        This note will be sent to the faculty who requested the swap.
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-success" id="acceptSwapBtn" onclick="submitAcceptSwap()">
+                    <span id="acceptSwapText">Accept Swap</span>
+                    <span id="acceptSwapSpinner" class="spinner-border spinner-border-sm d-none" role="status"></span>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Reject Swap Request Modal -->
+<div class="modal fade" id="rejectSwapModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Reject Swap Request</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="rejectSwapId">
+                <div class="alert alert-warning">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    Are you sure you want to reject this swap request?
+                </div>
+                <div class="mb-3">
+                    <label for="rejectSwapReason" class="form-label">Reason for Rejection (Optional):</label>
+                    <textarea class="form-control" id="rejectSwapReason" rows="3"
+                        placeholder="Please provide a reason for rejecting the swap (optional)" required></textarea>
+                    <div class="form-text">
+                        This reason will be sent to the faculty who requested the swap.
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-danger" id="rejectSwapBtn" onclick="submitRejectSwap()">
+                    <span id="rejectSwapText">Reject Swap</span>
+                    <span id="rejectSwapSpinner" class="spinner-border spinner-border-sm d-none" role="status"></span>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Profile Photo Upload Modal -->
+<div class="modal fade" id="uploadPhotoModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Upload Profile Photo</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="uploadPhotoForm" enctype="multipart/form-data">
+                    <div class="text-center mb-3">
+                        <!-- FIXED: Use profile_image_url for preview -->
+                        <img id="photoPreview"
+                            src="{% if profile_image_url %}{{ profile_image_url }}{% else %}{{ url_for('static', filename='profile_pics/' + (current_user.profile_image or 'default.png')) }}?t={{ current_time }}{% endif %}"
+                            alt="Profile Preview" class="img-fluid rounded-circle"
+                            style="width: 150px; height: 150px; object-fit: cover;">
+                    </div>
+                    <div class="mb-3">
+                        <label for="profile_photo" class="form-label">Select Photo</label>
+                        <input class="form-control" type="file" id="profile_photo" name="profile_photo"
+                            accept="image/png, image/jpeg, image/jpg" required onchange="previewPhoto(event)">
+                        <div class="form-text">Max file size: 5MB. Supported formats: JPG, JPEG, PNG.</div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="uploadPhotoBtn" onclick="uploadProfilePhoto()">
+                    <span id="uploadPhotoText">Upload Photo</span>
+                    <span id="uploadPhotoSpinner" class="spinner-border spinner-border-sm d-none" role="status"></span>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Swap Requests Modal -->
+<div class="modal fade" id="swapRequestsModal" tabindex="-1" aria-labelledby="swapRequestsModalLabel"
+    aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="swapRequestsModalLabel">🔁 Duty Swap Management</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <!-- Tabs for Received and Sent Requests -->
+                <ul class="nav nav-tabs" id="swapTabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="received-tab" data-bs-toggle="tab"
+                            data-bs-target="#received" type="button" role="tab">
+                            Received Requests <span id="received-badge" class="badge bg-danger">0</span>
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="sent-tab" data-bs-toggle="tab" data-bs-target="#sent" type="button"
+                            role="tab">
+                            Sent Requests <span id="sent-badge" class="badge bg-info">0</span>
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="request-tab" data-bs-toggle="tab" data-bs-target="#request"
+                            type="button" role="tab">
+                            Request New Swap
+                        </button>
+                    </li>
+                </ul>
+
+                <div class="tab-content p-3" id="swapTabsContent">
+                    <!-- Received Requests Tab -->
+                    <div class="tab-pane fade show active" id="received" role="tabpanel">
+                        <div id="receivedRequestsList">
+                            <div class="text-center py-5">
+                                <div class="spinner-border" role="status">
+                                    <span class="visually-hidden">Loading...</span>
+                                </div>
+                                <p>Loading received requests...</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Sent Requests Tab -->
+                    <div class="tab-pane fade" id="sent" role="tabpanel">
+                        <div id="sentRequestsList">
+                            <div class="text-center py-5">
+                                <div class="spinner-border" role="status">
+                                    <span class="visually-hidden">Loading...</span>
+                                </div>
+                                <p>Loading sent requests...</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Request Swap Tab -->
+                    <div class="tab-pane fade" id="request" role="tabpanel">
+                        <form id="requestSwapForm">
+                            <div class="mb-3">
+                                <label class="form-label">Select Your Duty to Swap:</label>
+                                <select class="form-select" id="swapDutySelect" required
+                                    onchange="updateAvailableFaculty()">
+                                    <option value="">-- Select a duty --</option>
+                                    {% for duty in duties %}
+                                    {% if duty.status == 'Accepted' %}
+                                    <option value="{{ duty.id }}" data-exam="{{ duty.exam.subject_name }}"
+                                        data-date="{{ duty.exam.exam_date }}" data-hall="{{ duty.exam.hall }}">
+                                        {{ duty.exam.subject_name }} - {{ duty.exam.exam_date }} ({{ duty.exam.hall }})
+                                    </option>
+                                    {% endif %}
+                                    {% endfor %}
+                                </select>
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label">Select Faculty to Swap With:</label>
+                                <select class="form-select" id="swapFacultySelect" required>
+                                    <option value="">-- Loading available faculty... --</option>
+                                </select>
+                                <div class="form-text">
+                                    <span id="availableSlotsInfo"></span>
+                                </div>
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label">Reason for Swap (Optional):</label>
+                                <textarea class="form-control" id="swapReason" rows="3"
+                                    placeholder="Please explain why you want to swap this duty (optional)"></textarea>
+                                <div class="form-text">This will help the other faculty understand your request.</div>
+                            </div>
+
+                            <div class="d-grid">
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="fas fa-exchange-alt"></i> Send Swap Request
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Quick Swap Modal (for individual duty) -->
+<div class="modal fade" id="quickSwapModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="quickSwapTitle">Request Swap</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="quickSwapDutyId">
+                <div class="mb-3">
+                    <label class="form-label">Select Faculty to Swap With:</label>
+                    <select class="form-select" id="quickSwapFacultySelect" required>
+                        <option value="">-- Loading available faculty... --</option>
+                    </select>
+                    <div class="form-text" id="quickSwapInfo"></div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Reason for Swap (Optional):</label>
+                    <textarea class="form-control" id="quickSwapReason" rows="3"
+                        placeholder="Please explain why you want to swap this duty"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="submitQuickSwap()">
+                    <i class="fas fa-paper-plane"></i> Send Request
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add Timetable Modal -->
+<div class="modal fade" id="addTimetableModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Add Timetable Entry</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="addTimetableForm">
+                    <div class="mb-3">
+                        <label class="form-label">Day of Week</label>
+                        <select class="form-select" name="day_of_week" required>
+                            <option value="Monday">Monday</option>
+                            <option value="Tuesday">Tuesday</option>
+                            <option value="Wednesday">Wednesday</option>
+                            <option value="Thursday">Thursday</option>
+                            <option value="Friday">Friday</option>
+                            <option value="Saturday">Saturday</option>
+                            <option value="Sunday">Sunday</option>
+                        </select>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Start Time</label>
+                            <input type="time" class="form-control" name="start_time" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">End Time</label>
+                            <input type="time" class="form-control" name="end_time" required>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Subject / Activity (Optional)</label>
+                        <input type="text" class="form-control" name="subject" placeholder="e.g. CS101 Lecture">
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="addTimetableEntry()">Save Entry</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Load timetable data
+    function loadTimetable() {
+        console.log("Loading timetable...");
+        fetch('/faculty/get-timetable')
+            .then(res => res.json())
+            .then(data => {
+                const tbody = document.getElementById('timetableBody');
+                tbody.innerHTML = '';
+
+                if (data.error) {
+                    tbody.innerHTML = `<tr><td colspan="5" class="text-danger text-center">${data.error}</td></tr>`;
+                    return;
+                }
+
+                if (data.length === 0) {
+                    tbody.innerHTML = `<tr><td colspan="5" class="text-center text-muted">No entries found. Add your weekly schedule here.</td></tr>`;
+                    return;
+                }
+
+                // Sort by Day then Time
+                const days = { 'Monday': 1, 'Tuesday': 2, 'Wednesday': 3, 'Thursday': 4, 'Friday': 5, 'Saturday': 6, 'Sunday': 7 };
+                data.sort((a, b) => {
+                    const dayDiff = days[a.day_of_week] - days[b.day_of_week];
+                    if (dayDiff !== 0) return dayDiff;
+                    return a.start_time.localeCompare(b.start_time);
+                });
+
+                data.forEach(entry => {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td>${entry.day_of_week}</td>
+                        <td>${entry.start_time}</td>
+                        <td>${entry.end_time}</td>
+                        <td>${entry.subject || '-'}</td>
+                        <td>
+                            <button class="btn btn-sm btn-outline-danger" onclick="deleteTimetableEntry(${entry.id})">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            })
+            .catch(err => {
+                console.error("Error loading timetable:", err);
+                document.getElementById('timetableBody').innerHTML = `<tr><td colspan="5" class="text-danger text-center">Failed to load timetable.</td></tr>`;
+            });
+    }
+
+    // Add new entry
+    function addTimetableEntry() {
+        const form = document.getElementById('addTimetableForm');
+        if (!form.checkValidity()) {
+            form.reportValidity();
+            return;
+        }
+
+        const formData = new FormData(form);
+        const data = Object.fromEntries(formData.entries());
+
+        fetch('/faculty/add-timetable', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    // Close modal
+                    const modal = bootstrap.Modal.getInstance(document.getElementById('addTimetableModal'));
+                    modal.hide();
+                    form.reset();
+                    showFlashMessage('success', 'Timetable entry added.');
+                    loadTimetable(); // Reload table
+                } else {
+                    showFlashMessage('danger', data.error || 'Failed to add entry.');
+                }
+            })
+            .catch(err => {
+                console.error("Error adding timetable:", err);
+                showFlashMessage('danger', 'An error occurred.');
+            });
+    }
+
+    // Delete entry
+    function deleteTimetableEntry(id) {
+        if (!confirm('Are you sure you want to delete this entry?')) return;
+
+        fetch(`/faculty/delete-timetable/${id}`, { method: 'POST' })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    showFlashMessage('success', 'Entry deleted.');
+                    loadTimetable();
+                } else {
+                    showFlashMessage('danger', data.error || 'Failed to delete.');
+                }
+            })
+            .catch(err => console.error(err));
+    }
+</script>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Global variables
+    let currentSwapId = null;
+    let swapData = {
+        received: [],
+        sent: []
+    };
+
+    // Show flash messages
+    function showFlashMessage(type, message) {
+        const flashDiv = document.getElementById('flashMessages');
+        const alert = document.createElement('div');
+        alert.className = `alert alert-${type} alert-dismissible fade show mb-3`;
+        alert.innerHTML = `
+            ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        `;
+        flashDiv.appendChild(alert);
+
+        // Auto-remove after 5 seconds
+        setTimeout(() => {
+            if (alert.parentNode) {
+                alert.remove();
+            }
+        }, 5000);
+    }
+
+    // Handle Accept button clicks with event prevention
+    function acceptDuty(dutyId, event) {
+        if (event) event.preventDefault();
+        if (!confirm('Are you sure you want to accept this duty?')) return;
+
+        fetch('/faculty/respond-duty', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify({
+                duty_id: dutyId,
+                response: 'accept',
+                reason: ''
+            })
+        })
+            .then(response => {
+                console.log('Accept response status:', response.status);
+
+                if (!response.ok) {
+                    return response.text().then(text => {
+                        throw new Error(`HTTP error! status: ${response.status}, body: ${text}`);
+                    });
+                }
+                return response.json();
+            })
+            .then(data => {
+                console.log('Accept response data:', data);
+                if (data.success) {
+                    showFlashMessage('success', 'Duty accepted successfully!');
+
+                    // Update button appearance
+                    if (event && event.target) {
+                        event.target.textContent = "✓ Accepted";
+                        event.target.style.backgroundColor = "#4CAF50";
+                        event.target.style.color = "white";
+                        event.target.onclick = null;
+
+                        // Disable the Deny button
+                        const denyBtn = event.target.closest('.btn-group').querySelector('.deny');
+                        if (denyBtn) {
+                            denyBtn.disabled = true;
+                            denyBtn.style.opacity = "0.5";
+                        }
+                    }
+
+                    setTimeout(() => location.reload(), 1500);
+                } else {
+                    showFlashMessage('danger', 'Error: ' + (data.error || 'Failed to accept duty'));
+                }
+            })
+            .catch(error => {
+                console.error('Error accepting duty:', error);
+                showFlashMessage('danger', 'Error accepting duty: ' + error.message);
+            });
+    }
+
+    // Handle Accept from notification
+    function acceptDutyFromNotification(dutyId, notificationMessage, notificationId, button, event) {
+        if (event) event.preventDefault();
+
+        // Extract subject and date from notification message
+        let subject = "this duty";
+        let date = "";
+        if (notificationMessage.includes('for')) {
+            const parts = notificationMessage.split('for');
+            if (parts.length > 1) {
+                subject = parts[1].trim();
+                // Try to extract date if present
+                const dateMatch = subject.match(/\bon\s+(\d{4}-\d{2}-\d{2})/);
+                if (dateMatch) {
+                    date = dateMatch[1];
+                    subject = subject.split(' on ')[0];
+                }
+            }
+        }
+
+        const confirmationMsg = date ?
+            `Accept duty for ${subject} on ${date}?` :
+            `Accept duty for ${subject}?`;
+
+        if (!confirm(confirmationMsg)) return;
+
+        // Update button immediately for better UX
+        button.textContent = "Processing...";
+        button.disabled = true;
+
+        fetch('/faculty/respond-duty', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify({
+                duty_id: dutyId,
+                notification_id: notificationId,
+                response: 'accept',
+                reason: ''
+            })
+        })
+            .then(response => {
+                console.log('Accept response status:', response.status);
+
+                if (!response.ok) {
+                    return response.text().then(text => {
+                        throw new Error(`HTTP error! status: ${response.status}, body: ${text}`);
+                    });
+                }
+                return response.json();
+            })
+            .then(data => {
+                console.log('Accept response data:', data);
+                if (data.success) {
+                    // Update button appearance
+                    button.textContent = "✓ Accepted";
+                    button.style.backgroundColor = "#4CAF50";
+                    button.style.color = "white";
+                    button.onclick = null;
+
+                    // Disable other buttons in the group
+                    const btnGroup = button.closest('.btn-group');
+                    if (btnGroup) {
+                        const otherButtons = btnGroup.querySelectorAll('a');
+                        other.forEach(btn => {
+                            if (btn !== button) {
+                                btn.disabled = true;
+                                btn.style.opacity = "0.5";
+                            }
+                        });
+                    }
+
+                    // Update notification appearance
+                    const notification = button.closest('.notification');
+                    if (notification) {
+                        notification.style.opacity = "0.8";
+                    }
+
+                    showFlashMessage('success', 'Duty accepted successfully!');
+                    setTimeout(() => location.reload(), 1500);
+                } else {
+                    showFlashMessage('danger', 'Error: ' + (data.error || 'Failed to accept duty'));
+                    button.textContent = "Accept";
+                    button.disabled = false;
+                }
+            })
+            .catch(error => {
+                console.error('Error accepting duty:', error);
+                showFlashMessage('danger', 'Error accepting duty: ' + error.message);
+                button.textContent = "Accept";
+                button.disabled = false;
+            });
+    }
+
+    // Show deny modal with exam name
+    function showDenyModal(dutyId, examName, event) {
+        if (event) event.preventDefault();
+        document.getElementById('denyDutyId').value = dutyId;
+        document.getElementById('denyModalTitle').textContent = `Provide Reason for Denial - ${examName}`;
+
+        // Clear previous inputs
+        document.getElementById('denyReasonType').value = '';
+        document.getElementById('denyReason').value = '';
+
+        new bootstrap.Modal(document.getElementById('denyDutyModal')).show();
+    }
+
+    // Duty denial
+    function denyDuty() {
+        const dutyId = document.getElementById('denyDutyId').value;
+        const reasonType = document.getElementById('denyReasonType').value;
+        const detailedReason = document.getElementById('denyReason').value.trim();
+
+        if (!reasonType || !detailedReason) {
+            showFlashMessage('warning', 'Please select a reason type and provide a detailed explanation.');
+            return;
+        }
+
+        const formattedReason = `Type: ${reasonType}\nDetails: ${detailedReason}`;
+
+        console.log('Sending deny request:', {
+            duty_id: dutyId,
+            response: 'deny',
+            reason: formattedReason
+        });
+
+        // Show loading state
+        const denyBtn = document.getElementById('denySubmitBtn');
+        const denyText = document.getElementById('denyBtnText');
+        const denySpinner = document.getElementById('denyBtnSpinner');
+
+        denyBtn.disabled = true;
+        denyText.classList.add('d-none');
+        denySpinner.classList.remove('d-none');
+
+        fetch('/faculty/respond-duty', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify({
+                duty_id: dutyId,
+                response: 'deny',
+                reason: formattedReason
+            })
+        })
+            .then(response => {
+                console.log('Deny response status:', response.status);
+
+                if (!response.ok) {
+                    return response.text().then(text => {
+                        throw new Error(`HTTP error! status: ${response.status}, body: ${text}`);
+                    });
+                }
+                return response.json();
+            })
+            .then(data => {
+                console.log('Deny response data:', data);
+
+                // Reset button state
+                denyBtn.disabled = false;
+                denyText.classList.remove('d-none');
+                denySpinner.classList.add('d-none');
+
+                if (data.success) {
+                    showFlashMessage('success', 'Duty declined successfully. Administrator has been notified.');
+                    const modal = bootstrap.Modal.getInstance(document.getElementById('denyDutyModal'));
+                    if (modal) modal.hide();
+
+                    // Update button appearances if applicable
+                    const acceptBtns = document.querySelectorAll(`a[href="#accept-duty"][onclick*="${dutyId}"]`);
+                    acceptBtns.forEach(btn => {
+                        btn.disabled = true;
+                        btn.style.opacity = "0.5";
+                    });
+
+                    setTimeout(() => location.reload(), 1500);
+                } else {
+                    showFlashMessage('danger', 'Error: ' + (data.error || 'Failed to decline duty'));
+                }
+            })
+            .catch(error => {
+                console.error('Error denying duty:', error);
+
+                // Reset button state
+                denyBtn.disabled = false;
+                denyText.classList.remove('d-none');
+                denySpinner.classList.add('d-none');
+
+                showFlashMessage('danger', 'Error submitting rejection: ' + error.message);
+            });
+    }
+
+    // Mark notification as read with enhanced UI
+    function markNotificationRead(notificationId, button, event) {
+        if (event) event.preventDefault();
+
+        // Update UI immediately for better UX
+        if (button) {
+            button.textContent = "Processing...";
+            button.disabled = true;
+        }
+
+        fetch('/faculty/mark-notification-read/' + notificationId, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Update notification appearance
+                    const notification = button ? button.closest('.notification') : null;
+                    if (notification) {
+                        notification.classList.remove('border-primary');
+                        notification.classList.add('bg-light');
+                        notification.style.opacity = "0.6";
+
+                        // Remove unread badge
+                        const badge = notification.querySelector('.badge-dot');
+                        if (badge) badge.remove();
+                    }
+
+                    // Update button
+                    if (button) {
+                        button.textContent = "✓ Read";
+                        button.style.color = "#888";
+                        button.onclick = null;
+                    }
+
+                    console.log("Marked notification as read");
+                } else {
+                    if (button) {
+                        button.textContent = "Mark as Read";
+                        button.disabled = false;
+                    }
+                }
+            })
+            .catch(error => {
+                console.error('Error marking notification as read:', error);
+                if (button) {
+                    button.textContent = "Mark as Read";
+                    button.disabled = false;
+                }
+            });
+    }
+
+    // Show swap modal for individual duty
+    function showSwapModal(dutyId) {
+        console.log("Attempting to show swap modal for duty:", dutyId);
+        try {
+            // Ensure dutyId is a string for selector matching
+            dutyId = String(dutyId);
+
+            const dutySelect = document.getElementById('swapDutySelect');
+            if (!dutySelect) {
+                console.error("Critical Error: 'swapDutySelect' element not found in DOM");
+                alert("Error: Swap modal elements are missing. Please refresh the page.");
+                return;
+            }
+
+            const option = dutySelect.querySelector(`option[value="${dutyId}"]`);
+
+            if (option) {
+                // Switch to request tab in swap modal
+                const requestTab = document.getElementById('request-tab');
+                if (requestTab) {
+                    requestTab.click();
+                } else {
+                    // Fallback if tab not found (shouldn't happen)
+                    const tabInstance = new bootstrap.Tab(document.querySelector('#request-tab'));
+                    tabInstance.show();
+                }
+
+                dutySelect.value = dutyId;
+                updateAvailableFaculty();
+
+                const modalElement = document.getElementById('swapRequestsModal');
+                const modal = new bootstrap.Modal(modalElement);
+                modal.show();
+            } else {
+                console.warn("Duty not found in primary select, trying quick swap modal...");
+                // Use quick swap modal
+                const quickSwapIdInput = document.getElementById('quickSwapDutyId');
+                if (!quickSwapIdInput) {
+                    console.error("Critical Error: 'quickSwapDutyId' input not found");
+                    return;
+                }
+                quickSwapIdInput.value = dutyId;
+
+                // Get duty details for title
+                // Try to find the row that contains the button that triggered this
+                // Since we don't have the event object here easily without changing signature everywhere, 
+                // we'll look for the button with the matching onclick
+                const btnSelector = `button[onclick*="showSwapModal('${dutyId}')"], button[onclick*='showSwapModal("${dutyId}")'], button[onclick*="showSwapModal(${dutyId})"]`;
+                const dutyBtn = document.querySelector(btnSelector);
+                const dutyRow = dutyBtn ? dutyBtn.closest('tr') : null;
+
+                if (dutyRow) {
+                    const subject = dutyRow.cells[1].textContent.split('(')[0].trim();
+                    const date = dutyRow.cells[0].textContent;
+                    const titleEl = document.getElementById('quickSwapTitle');
+                    if (titleEl) titleEl.textContent = `Swap Duty: ${subject} (${date})`;
+                }
+
+                // Load available faculty
+                loadAvailableFacultyForQuickSwap(dutyId);
+
+                const quickModalElement = document.getElementById('quickSwapModal');
+                const modal = new bootstrap.Modal(quickModalElement);
+                modal.show();
+            }
+        } catch (e) {
+            console.error("Error in showSwapModal:", e);
+            alert("An unexpected error occurred while trying to open the swap options. Check console for details.");
+        }
+    }
+
+    // Load available faculty for quick swap
+    function loadAvailableFacultyForQuickSwap(dutyId) {
+        const select = document.getElementById('quickSwapFacultySelect');
+        select.innerHTML = '<option value="">-- Loading... --</option>';
+
+        fetch('/faculty/get-available-faculty')
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    select.innerHTML = '<option value="">-- Select faculty --</option>';
+
+                    data.faculties.forEach(faculty => {
+                        const option = document.createElement('option');
+                        option.value = faculty.id;
+                        option.textContent = `${faculty.name} (${faculty.department})`;
+                        option.disabled = !faculty.is_available;
+
+                        if (!faculty.is_available) {
+                            option.textContent += ' - No available slots';
+                        }
+
+                        select.appendChild(option);
+                    });
+
+                    // Update info text
+                    const availableCount = data.faculties.filter(f => f.is_available).length;
+                    document.getElementById('quickSwapInfo').textContent =
+                        `${availableCount} faculty members available for swap`;
+                } else {
+                    select.innerHTML = '<option value="">Error loading faculty</option>';
+                }
+            })
+            .catch(error => {
+                console.error('Error loading faculty:', error);
+                select.innerHTML = '<option value="">Error loading faculty list</option>';
+            });
+    }
+
+    // Submit quick swap
+    function submitQuickSwap() {
+        const dutyId = document.getElementById('quickSwapDutyId').value;
+        const facultyId = document.getElementById('quickSwapFacultySelect').value;
+        const reason = document.getElementById('quickSwapReason').value.trim();
+
+        if (!facultyId) {
+            showFlashMessage('warning', 'Please select a faculty member to swap with.');
+            return;
+        }
+
+        sendSwapRequest(dutyId, facultyId, reason);
+    }
+
+    // Update available faculty based on selected duty
+    function updateAvailableFaculty() {
+        const dutyId = document.getElementById('swapDutySelect').value;
+        const select = document.getElementById('swapFacultySelect');
+
+        if (!dutyId) {
+            select.innerHTML = '<option value="">-- Select a duty first --</option>';
+            return;
+        }
+
+        select.innerHTML = '<option value="">-- Loading... --</option>';
+
+        fetch('/faculty/get-available-faculty')
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    select.innerHTML = '<option value="">-- Select faculty --</option>';
+
+                    let availableCount = 0;
+                    data.faculties.forEach(faculty => {
+                        if (faculty.is_available) {
+                            const option = document.createElement('option');
+                            option.value = faculty.id;
+                            option.textContent = `${faculty.name} (${faculty.department}) - ${faculty.available_slots} slots available`;
+                            select.appendChild(option);
+                            availableCount++;
+                        }
+                    });
+
+                    document.getElementById('availableSlotsInfo').textContent =
+                        `${availableCount} faculty members available for swap`;
+
+                    if (availableCount === 0) {
+                        select.innerHTML = '<option value="">No faculty available for swap</option>';
+                        select.disabled = true;
+                    }
+                } else {
+                    select.innerHTML = '<option value="">Error loading faculty</option>';
+                }
+            })
+            .catch(error => {
+                console.error('Error loading faculty:', error);
+                select.innerHTML = '<option value="">Error loading faculty list</option>';
+            });
+    }
+
+    // Send swap request
+    function sendSwapRequest(dutyId, facultyId, reason) {
+        if (!confirm(`Are you sure you want to request a swap with this faculty member?`)) return;
+
+        fetch('/faculty/request-swap', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify({
+                duty_id: dutyId,
+                target_faculty_id: facultyId,
+                reason: reason
+            })
+        })
+            .then(response => {
+                console.log('Swap request response status:', response.status);
+
+                if (!response.ok) {
+                    return response.text().then(text => {
+                        throw new Error(`HTTP error! status: ${response.status}, body: ${text}`);
+                    });
+                }
+                return response.json();
+            })
+            .then(data => {
+                console.log('Swap request response data:', data);
+
+                if (data.success) {
+                    showFlashMessage('success', data.message || 'Swap request sent successfully!');
+
+                    // Close modals
+                    const quickModal = bootstrap.Modal.getInstance(document.getElementById('quickSwapModal'));
+                    if (quickModal) quickModal.hide();
+
+                    const swapModal = bootstrap.Modal.getInstance(document.getElementById('swapRequestsModal'));
+                    if (swapModal) swapModal.hide();
+
+                    // Refresh swap data
+                    loadSwapData();
+                    setTimeout(() => location.reload(), 2000);
+                } else {
+                    showFlashMessage('danger', 'Error: ' + (data.error || 'Failed to send swap request'));
+                }
+            })
+            .catch(error => {
+                console.error('Error requesting swap:', error);
+                showFlashMessage('danger', 'Error sending swap request: ' + error.message);
+            });
+    }
+
+    // Load swap requests when modal opens
+    document.getElementById('swapRequestsModal').addEventListener('show.bs.modal', function () {
+        loadSwapData();
+    });
+
+    // Load swap data
+    function loadSwapData() {
+        fetch('/faculty/get-swap-requests')
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    swapData.received = data.received_requests || [];
+                    swapData.sent = data.sent_requests || [];
+
+                    renderReceivedRequests(swapData.received);
+                    renderSentRequests(swapData.sent);
+                    updateSwapStats();
+
+                    // Update notification badge
+                    const badge = document.getElementById('swapNotificationBadge');
+                    if (swapData.received.length > 0) {
+                        badge.textContent = swapData.received.length;
+                        badge.classList.remove('d-none');
+                    } else {
+                        badge.classList.add('d-none');
+                    }
+                } else {
+                    showFlashMessage('danger', 'Error loading swap requests: ' + data.error);
+                }
+            })
+            .catch(error => {
+                console.error('Error loading swap data:', error);
+                showFlashMessage('danger', 'Error loading swap requests');
+            });
+    }
+
+    // Render received requests
+    function renderReceivedRequests(requests) {
+        const container = document.getElementById('receivedRequestsList');
+        const badge = document.getElementById('received-badge');
+
+        badge.textContent = requests.length;
+
+        if (requests.length === 0) {
+            container.innerHTML = `
+                <div class="text-center py-5">
+                    <i class="fas fa-inbox fa-3x text-muted mb-3"></i>
+                    <p class="text-muted">No pending swap requests</p>
+                </div>
+            `;
+            return;
+        }
+
+        let html = '';
+        requests.forEach(request => {
+            html += `
+                <div class="card mb-3">
+                    <div class="card-body">
+                        <h6 class="card-title">${request.exam_name} (${request.subject_code})</h6>
+                        <p class="card-text">
+                            <small class="text-muted">
+                                <i class="fas fa-calendar"></i> ${request.exam_date}<br>
+                                <i class="fas fa-clock"></i> ${request.exam_time}<br>
+                                <i class="fas fa-door-closed"></i> ${request.hall}<br>
+                                <i class="fas fa-user"></i> From: ${request.requester_name} (${request.requester_department})
+                            </small>
+                        </p>
+                        ${request.notes ? `<p class="card-text"><strong>Reason:</strong> ${request.notes}</p>` : ''}
+                        <div class="d-flex justify-content-between mt-3">
+                            <div>
+                                <a href="#accept-swap" class="btn btn-sm btn-success" onclick="acceptSwapRequest(${request.swap_id})">
+                                    <i class="fas fa-check"></i> Accept
+                                </a>
+                                <a href="#reject-swap" class="btn btn-sm btn-danger" onclick="rejectSwapRequest(${request.swap_id})">
+                                    <i class="fas fa-times"></i> Reject
+                                </a>
+                            </div>
+                            <small class="text-muted align-self-end">${request.created_at}</small>
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+
+        container.innerHTML = html;
+    }
+
+    // Render sent requests
+    function renderSentRequests(requests) {
+        const container = document.getElementById('sentRequestsList');
+        const badge = document.getElementById('sent-badge');
+
+        badge.textContent = requests.length;
+
+        if (requests.length === 0) {
+            container.innerHTML = `
+                <div class="text-center py-5">
+                    <i class="fas fa-paper-plane fa-3x text-muted mb-3"></i>
+                    <p class="text-muted">No sent swap requests</p>
+                </div>
+            `;
+            return;
+        }
+
+        let html = '';
+        requests.forEach(request => {
+            const statusClass = request.status === 'Pending' ? 'warning' :
+                request.status === 'Accepted' ? 'success' : 'danger';
+
+            html += `
+                <div class="card mb-3">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <h6 class="card-title mb-0">${request.exam_name}</h6>
+                            <span class="badge bg-${statusClass}">${request.status}</span>
+                        </div>
+                        <p class="card-text mt-2">
+                            <small class="text-muted">
+                                <i class="fas fa-calendar"></i> ${request.exam_date}<br>
+                                <i class="fas fa-user"></i> To: ${request.requested_faculty_name}
+                            </small>
+                        </p>
+                        <div class="d-flex justify-content-between align-items-center">
+                            <small class="text-muted">${request.created_at}</small>
+                            ${request.status === 'Pending' ? `
+                                <a href="#cancel-swap" class="btn btn-sm btn-outline-danger" onclick="cancelSwapRequest(${request.swap_id}, event)">
+                                    <i class="fas fa-trash"></i> Cancel
+                                </a>
+                            ` : ''}
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+
+        container.innerHTML = html;
+    }
+
+    // Update swap statistics
+    function updateSwapStats() {
+        const received = swapData.received || [];
+        const sent = swapData.sent || [];
+
+        const pendingReceived = received.length;
+        const pendingSent = sent.filter(s => s.status === 'Pending').length;
+        const acceptedSwaps = sent.filter(s => s.status === 'Accepted').length;
+        const rejectedSwaps = sent.filter(s => s.status === 'Rejected').length;
+
+        document.getElementById('pendingReceivedCount').textContent = pendingReceived;
+        document.getElementById('pendingSentCount').textContent = pendingSent;
+        document.getElementById('acceptedSwapsCount').textContent = acceptedSwaps;
+        document.getElementById('rejectedSwapsCount').textContent = rejectedSwaps;
+    }
+
+    // Accept swap request
+    function acceptSwapRequest(swapId, event) {
+        if (event) event.preventDefault();
+        document.getElementById('acceptSwapId').value = swapId;
+        document.getElementById('acceptSwapReason').value = '';
+
+        const modal = new bootstrap.Modal(document.getElementById('acceptSwapModal'));
+        modal.show();
+    }
+
+    function submitAcceptSwap() {
+        const swapId = document.getElementById('acceptSwapId').value;
+        const reason = document.getElementById('acceptSwapReason').value.trim();
+
+        // Show loading state
+        const acceptBtn = document.getElementById('acceptSwapBtn');
+        const acceptText = document.getElementById('acceptSwapText');
+        const acceptSpinner = document.getElementById('acceptSwapSpinner');
+
+        acceptBtn.disabled = true;
+        acceptText.classList.add('d-none');
+        acceptSpinner.classList.remove('d-none');
+
+        fetch('/faculty/respond-swap', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify({
+                swap_id: swapId,
+                response: 'accept',
+                reason: reason
+            })
+        })
+            .then(response => {
+                console.log('Accept swap response status:', response.status);
+
+                if (!response.ok) {
+                    return response.text().then(text => {
+                        throw new Error(`HTTP error! status: ${response.status}, body: ${text}`);
+                    });
+                }
+                return response.json();
+            })
+            .then(data => {
+                console.log('Accept swap response data:', data);
+
+                // Reset button state
+                acceptBtn.disabled = false;
+                acceptText.classList.remove('d-none');
+                acceptSpinner.classList.add('d-none');
+
+                if (data.success) {
+                    showFlashMessage('success', data.message || 'Swap request accepted successfully!');
+                    const modal = bootstrap.Modal.getInstance(document.getElementById('acceptSwapModal'));
+                    if (modal) modal.hide();
+
+                    // Close swap modal if open
+                    const swapModal = bootstrap.Modal.getInstance(document.getElementById('swapRequestsModal'));
+                    if (swapModal) swapModal.hide();
+
+                    setTimeout(() => location.reload(), 1500);
+                } else {
+                    showFlashMessage('danger', 'Error: ' + (data.error || 'Failed to accept swap request'));
+                }
+            })
+            .catch(error => {
+                console.error('Error accepting swap:', error);
+
+                // Reset button state
+                acceptBtn.disabled = false;
+                acceptText.classList.remove('d-none');
+                acceptSpinner.classList.add('d-none');
+
+                showFlashMessage('danger', 'Error accepting swap request: ' + error.message);
+            });
+    }
+
+    // Reject swap request
+    function rejectSwapRequest(swapId, event) {
+        if (event) event.preventDefault();
+        document.getElementById('rejectSwapId').value = swapId;
+        document.getElementById('rejectSwapReason').value = '';
+
+        const modal = new bootstrap.Modal(document.getElementById('rejectSwapModal'));
+        modal.show();
+    }
+
+    function submitRejectSwap() {
+        const swapId = document.getElementById('rejectSwapId').value;
+        const reason = document.getElementById('rejectSwapReason').value.trim();
+
+        if (!reason) {
+            showFlashMessage('warning', 'Please provide a reason for rejecting the swap request.');
+            return;
+        }
+
+        // Show loading state
+        const rejectBtn = document.getElementById('rejectSwapBtn');
+        const rejectText = document.getElementById('rejectSwapText');
+        const rejectSpinner = document.getElementById('rejectSwapSpinner');
+
+        rejectBtn.disabled = true;
+        rejectText.classList.add('d-none');
+        rejectSpinner.classList.remove('d-none');
+
+        fetch('/faculty/respond-swap', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify({
+                swap_id: swapId,
+                response: 'reject',
+                reason: reason
+            })
+        })
+            .then(response => {
+                console.log('Reject swap response status:', response.status);
+
+                if (!response.ok) {
+                    return response.text().then(text => {
+                        throw new Error(`HTTP error! status: ${response.status}, body: ${text}`);
+                    });
+                }
+                return response.json();
+            })
+            .then(data => {
+                console.log('Reject swap response data:', data);
+
+                // Reset button state
+                rejectBtn.disabled = false;
+                rejectText.classList.remove('d-none');
+                rejectSpinner.classList.add('d-none');
+
+                if (data.success) {
+                    showFlashMessage('success', data.message || 'Swap request rejected successfully!');
+                    const modal = bootstrap.Modal.getInstance(document.getElementById('rejectSwapModal'));
+                    if (modal) modal.hide();
+
+                    // Reload swap data
+                    loadSwapData();
+                } else {
+                    showFlashMessage('danger', 'Error: ' + (data.error || 'Failed to reject swap request'));
+                }
+            })
+            .catch(error => {
+                console.error('Error rejecting swap:', error);
+
+                // Reset button state
+                rejectBtn.disabled = false;
+                rejectText.classList.remove('d-none');
+                rejectSpinner.classList.add('d-none');
+
+                showFlashMessage('danger', 'Error rejecting swap request: ' + error.message);
+            });
+    }
+
+    // Cancel swap request
+    function cancelSwapRequest(swapId, event) {
+        if (event) event.preventDefault();
+        if (!confirm('Are you sure you want to cancel this swap request?')) return;
+
+        fetch('/faculty/cancel-swap/' + swapId, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            }
+        })
+            .then(response => {
+                console.log('Cancel swap response status:', response.status);
+
+                if (!response.ok) {
+                    return response.text().then(text => {
+                        throw new Error(`HTTP error! status: ${response.status}, body: ${text}`);
+                    });
+                }
+                return response.json();
+            })
+            .then(data => {
+                console.log('Cancel swap response data:', data);
+                if (data.success) {
+                    showFlashMessage('success', data.message || 'Swap request cancelled successfully!');
+                    loadSwapData();
+                } else {
+                    showFlashMessage('danger', 'Error: ' + (data.error || 'Failed to cancel swap request'));
+                }
+            })
+            .catch(error => {
+                console.error('Error cancelling swap:', error);
+                showFlashMessage('danger', 'Error cancelling swap request: ' + error.message);
+            });
+    }
+
+    // Handle swap request form
+    document.getElementById('requestSwapForm').addEventListener('submit', function (e) {
+        e.preventDefault();
+
+        const dutyId = document.getElementById('swapDutySelect').value;
+        const facultyId = document.getElementById('swapFacultySelect').value;
+        const reason = document.getElementById('swapReason').value;
+
+        if (!dutyId || !facultyId) {
+            showFlashMessage('warning', 'Please select both duty and faculty');
+            return;
+        }
+
+        sendSwapRequest(dutyId, facultyId, reason);
+    });
+
+    // Profile photo functions
+    function showUploadPhotoModal() {
+        const modal = new bootstrap.Modal(document.getElementById('uploadPhotoModal'));
+        modal.show();
+    }
+
+    function previewPhoto(event) {
+        const input = event.target;
+        const preview = document.getElementById('photoPreview');
+
+        if (input.files && input.files[0]) {
+            // Validate file size (5MB max)
+            if (input.files[0].size > 5 * 1024 * 1024) {
+                showFlashMessage('danger', 'File size must be less than 5MB');
+                input.value = '';
+                preview.src = preview.dataset.original || preview.src;
+                return;
+            }
+
+            // Validate file type
+            const validTypes = ['image/jpeg', 'image/jpg', 'image/png'];
+            if (!validTypes.includes(input.files[0].type)) {
+                showFlashMessage('danger', 'Only JPG, JPEG, and PNG files are allowed');
+                input.value = '';
+                preview.src = preview.dataset.original || preview.src;
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = function (e) {
+                preview.src = e.target.result;
+            }
+            reader.readAsDataURL(input.files[0]);
+        }
+    }
+
+    function uploadProfilePhoto() {
+        const form = document.getElementById('uploadPhotoForm');
+        const fileInput = document.getElementById('profile_photo');
+
+        if (!fileInput.files[0]) {
+            showFlashMessage('warning', 'Please select a photo to upload');
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append('profile_photo', fileInput.files[0]);
+
+        // Show loading state
+        const uploadBtn = document.getElementById('uploadPhotoBtn');
+        const uploadText = document.getElementById('uploadPhotoText');
+        const uploadSpinner = document.getElementById('uploadPhotoSpinner');
+
+        uploadBtn.disabled = true;
+        uploadText.classList.add('d-none');
+        uploadSpinner.classList.remove('d-none');
+
+        fetch('/faculty/upload-profile-photo-ajax', {
+            method: 'POST',
+            body: formData
+        })
+            .then(response => response.json())
+            .then(data => {
+                console.log('Upload response data:', data);
+
+                // Reset button state
+                uploadBtn.disabled = false;
+                uploadText.classList.remove('d-none');
+                uploadSpinner.classList.add('d-none');
+
+                if (data.success) {
+                    showFlashMessage('success', data.message);
+
+                    // Update all profile images with the new URL
+                    const timestamp = new Date().getTime();
+                    const dashboardImage = document.getElementById('dashboardProfileImage');
+                    const previewImage = document.getElementById('photoPreview');
+
+                    if (data.profile_image_url) {
+                        // Update with new URL
+                        const newUrl = data.profile_image_url + (data.profile_image_url.includes('?') ? '&' : '?') + 't=' + timestamp;
+                        if (dashboardImage) dashboardImage.src = newUrl;
+                        if (previewImage) {
+                            previewImage.src = newUrl;
+                            previewImage.dataset.original = newUrl;
+                        }
+                    } else {
+                        // Fallback: Add timestamp to current URLs
+                        if (dashboardImage) dashboardImage.src = dashboardImage.src.split('?')[0] + '?t=' + timestamp;
+                        if (previewImage) {
+                            previewImage.src = previewImage.src.split('?')[0] + '?t=' + timestamp;
+                            previewImage.dataset.original = previewImage.src;
+                        }
+                    }
+
+                    // Close modal after delay
+                    setTimeout(() => {
+                        const modal = bootstrap.Modal.getInstance(document.getElementById('uploadPhotoModal'));
+                        if (modal) modal.hide();
+
+                        // Clear file input
+                        fileInput.value = '';
+
+                        // Reload after a moment to ensure everything updates
+                        setTimeout(() => location.reload(), 1000);
+                    }, 1500);
+                } else {
+                    showFlashMessage('danger', data.error || 'Failed to upload photo');
+                }
+            })
+            .catch(error => {
+                console.error('Error uploading photo:', error);
+
+                // Reset button state
+                uploadBtn.disabled = false;
+                uploadText.classList.remove('d-none');
+                uploadSpinner.classList.add('d-none');
+
+                showFlashMessage('danger', 'Error uploading photo: ' + error.message);
+            });
+    }
+
+    // Refresh duties
+    function refreshDuties() {
+        location.reload();
+    }
+
+    // Auto-load swap data on page load
+    document.addEventListener('DOMContentLoaded', function () {
+        const previewImage = document.getElementById('photoPreview');
+        if (previewImage) {
+            previewImage.dataset.original = previewImage.src;
+        }
+
+        // Add timestamp to prevent caching
+        const timestamp = new Date().getTime();
+        const profileImages = document.querySelectorAll('.profile-image');
+        profileImages.forEach(img => {
+            if (!img.src.includes('?')) {
+                img.src = img.src + '?t=' + timestamp;
+            }
+        });
+
+        // Load swap data on page load
+        loadSwapData();
+
+        // Auto-refresh swap data every 30 seconds
+        setInterval(loadSwapData, 30000);
+
+        // Add event listeners for anchor buttons
+        document.querySelectorAll('a[href="#accept-duty"], a[href="#deny-duty"], a[href="#mark-read"]').forEach(button => {
+            button.addEventListener('click', function (e) {
+                e.preventDefault();
+
+                const href = this.getAttribute('href');
+                if (href === "#accept-duty") {
+                    const onclickAttr = this.getAttribute('onclick');
+                    if (onclickAttr) {
+                        // Extract duty ID from onclick attribute
+                        const match = onclickAttr.match(/acceptDuty\((\d+)/);
+                        if (match) {
+                            acceptDuty(parseInt(match[1]), e);
+                        }
+                    }
+                } else if (href === "#deny-duty") {
+                    const onclickAttr = this.getAttribute('onclick');
+                    if (onclickAttr) {
+                        // Extract duty ID from onclick attribute
+                        const match = onclickAttr.match(/showDenyModal\((\d+),/);
+                        if (match) {
+                            showDenyModal(parseInt(match[1]), '', e);
+                        }
+                    }
+                } else if (href === "#mark-read") {
+                    const onclickAttr = this.getAttribute('onclick');
+                    if (onclickAttr) {
+                        // Extract notification ID from onclick attribute
+                        const match = onclickAttr.match(/markNotificationRead\((\d+),/);
+                        if (match) {
+                            markNotificationRead(parseInt(match[1]), this, e);
+                        }
+                    }
+                }
+            });
+        });
+    });
+</script>
+
+<style>
+    .profile-image {
+        border: 3px solid #007bff;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        transition: transform 0.3s ease;
+    }
+
+    .profile-image:hover {
+        transform: scale(1.05);
+    }
+
+    .notification {
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+
+    .notification:hover {
+        background-color: #f8f9fa !important;
+        transform: translateX(2px);
+    }
+
+    .badge-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        display: inline-block;
+    }
+
+    #denySubmitBtn:disabled,
+    #uploadPhotoBtn:disabled,
+    #acceptSwapBtn:disabled,
+    #rejectSwapBtn:disabled {
+        cursor: not-allowed;
+        opacity: 0.6;
+    }
+
+    .card {
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        border: 1px solid rgba(0, 0, 0, 0.125);
+    }
+
+    .card:hover {
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+    }
+
+    .table-hover tbody tr:hover {
+        background-color: rgba(0, 0, 0, 0.05);
+    }
+
+    .swap-request-actions {
+        min-width: 150px;
+    }
+
+    .nav-tabs .nav-link {
+        border: none;
+        border-bottom: 3px solid transparent;
+    }
+
+    .nav-tabs .nav-link.active {
+        border-bottom: 3px solid #0d6efd;
+        font-weight: bold;
+    }
+
+    .nav-tabs .badge {
+        font-size: 0.7em;
+        margin-left: 5px;
+    }
+
+    /* Style for action buttons */
+    .btn-group-sm .btn {
+        padding: 0.25rem 0.5rem;
+        font-size: 0.875rem;
+        border-radius: 0.2rem;
+    }
+
+    .btn-group-sm .btn.accept {
+        background-color: #28a745;
+        border-color: #28a745;
+        color: white;
+    }
+
+    .btn-group-sm .btn.deny {
+        background-color: #dc3545;
+        border-color: #dc3545;
+        color: white;
+    }
+
+    .btn-group-sm .btn:hover {
+        opacity: 0.9;
+    }
+
+    .btn-group-sm .btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+</style>
+{% endblock %}

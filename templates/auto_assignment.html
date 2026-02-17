@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+
+{% block title %}Smart Exam Duty Assignment{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-md-10 offset-md-1">
+            <div class="card shadow-sm">
+                <div class="card-header bg-primary text-white">
+                    <h4 class="mb-0"><i class="fas fa-brain"></i> AI-Powered Duty Assignment</h4>
+                </div>
+                <div class="card-body">
+                    <p class="card-text">
+                        Using AI to intelligently assign exam duties based on:
+                        <ul>
+                            <li>Faculty expertise and preferences</li>
+                            <li>Previous duty history</li>
+                            <li>Workload balance</li>
+                            <li>Schedule conflicts</li>
+                        </ul>
+                    </p>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label"><strong>Department</strong></label>
+                            <select id="department" class="form-select">
+                                <option value="" selected disabled>Select Department</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label"><strong>Assignment Mode</strong></label>
+                            <select id="assignmentMode" class="form-select">
+                                <option value="balanced">Balanced Distribution</option>
+                                <option value="expertise">Expertise-Based</option>
+                                <option value="optimal">AI Optimal</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="mt-4">
+                        <button class="btn btn-success btn-lg w-100" onclick="startSmartAssignment()">
+                            <i class="fas fa-magic"></i> Start Smart Assignment
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="assignmentProgress" class="card mt-4" style="display: none;">
+                <!-- Progress indicator will be shown here -->
+            </div>
+
+            <div id="aiInsights" class="card mt-4" style="display: none;">
+                <!-- AI insights will be shown here -->
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function startSmartAssignment() {
+    const department = document.getElementById('department').value;
+    const mode = document.getElementById('assignmentMode').value;
+    
+    if (!department) {
+        alert('Please select a department');
+        return;
+    }
+
+    // Show progress
+    document.getElementById('assignmentProgress').style.display = 'block';
+    document.getElementById('assignmentProgress').innerHTML = `
+        <div class="card-body">
+            <h5><i class="fas fa-spinner fa-spin"></i> AI Processing</h5>
+            <div class="progress">
+                <div class="progress-bar progress-bar-striped progress-bar-animated" 
+                     role="progressbar" style="width: 0%"></div>
+            </div>
+        </div>
+    `;
+
+    // Make API call
+    fetch('/api/smart-assign', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ department, mode })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showSuccessUI(data);
+            showAIInsights(data.insights);
+        } else {
+            showErrorUI(data.error);
+        }
+    })
+    .catch(error => showErrorUI(error));
+}
+
+function showAIInsights(insights) {
+    const insightsDiv = document.getElementById('aiInsights');
+    insightsDiv.style.display = 'block';
+    insightsDiv.innerHTML = `
+        <div class="card-header bg-info text-white">
+            <h5 class="mb-0"><i class="fas fa-lightbulb"></i> AI Insights</h5>
+        </div>
+        <div class="card-body">
+            <ul class="list-group">
+                ${insights.map(insight => `
+                    <li class="list-group-item">
+                        <i class="fas fa-check-circle text-success"></i> ${insight}
+                    </li>
+                `).join('')}
+            </ul>
+        </div>
+    `;
+}
+
+// ...existing code...
+</script>
+{% endblock %}

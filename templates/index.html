@@ -1,0 +1,60 @@
+{% extends 'base.html' %}
+
+{% block title %}Exam Duty System - Home{% endblock %}
+
+{% block content %}
+<div class="row min-vh-50 align-items-center justify-content-center mt-5">
+    <div class="col-md-8 text-center">
+        <h1 class="mb-5 display-4 fw-bold text-primary">Exam Duty Management System</h1>
+
+        <div class="row g-4 justify-content-center">
+            <!-- Admin Portal Card -->
+            <div class="col-md-5">
+                <div class="card h-100 shadow-lg border-0 hover-transform">
+                    <div class="card-body p-5">
+                        <div class="mb-4">
+                            <i class="fas fa-user-shield fa-4x text-primary"></i>
+                        </div>
+                        <h3 class="card-title fw-bold">Admin Portal</h3>
+                        <p class="card-text text-muted mb-4">Manage exams, duties, and faculty assignments</p>
+                        <a href="{{ url_for('admin_login') }}" class="btn btn-primary btn-lg w-100 rounded-pill">
+                            Login as Admin <i class="fas fa-arrow-right ms-2"></i>
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Faculty Portal Card -->
+            <div class="col-md-5">
+                <div class="card h-100 shadow-lg border-0 hover-transform">
+                    <div class="card-body p-5">
+                        <div class="mb-4">
+                            <i class="fas fa-chalkboard-teacher fa-4x text-success"></i>
+                        </div>
+                        <h3 class="card-title fw-bold">Faculty Portal</h3>
+                        <p class="card-text text-muted mb-4">View your schedule and manage duty swaps</p>
+                        <a href="{{ url_for('faculty_login') }}" class="btn btn-success btn-lg w-100 rounded-pill">
+                            Login as Faculty <i class="fas fa-arrow-right ms-2"></i>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="mt-5 text-muted small">
+            <p>&copy; 2025 Exam Duty System. All rights reserved.</p>
+        </div>
+    </div>
+</div>
+
+<style>
+    .hover-transform {
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+
+    .hover-transform:hover {
+        transform: translateY(-10px);
+        box-shadow: 0 1rem 3rem rgba(0, 0, 0, .175) !important;
+    }
+</style>
+{% endblock %}

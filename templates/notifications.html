@@ -1,0 +1,443 @@
+{% extends "base.html" %}
+
+{% block title %}Notifications - Exam Duty System{% endblock %}
+
+{% block navbar %}
+<nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+    <div class="container">
+        <a class="navbar-brand" href="#">Exam Duty System</a>
+        <div class="navbar-nav ms-auto">
+            <a class="nav-link" href="{{ url_for('faculty_dashboard') }}">My Duties</a>
+            <a class="nav-link active" href="{{ url_for('faculty_notifications') }}">Notifications</a>
+            <a class="nav-link" href="{{ url_for('logout') }}">Logout</a>
+        </div>
+    </div>
+</nav>
+{% endblock %}
+
+{% block content %}
+<h1 class="mb-4">Notifications</h1>
+
+<!-- Deny Duty Modal -->
+<div class="modal fade" id="denyDutyModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Provide Reason for Denial</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="denyNotificationId">
+                <input type="hidden" id="denyDutyId">
+                <div class="mb-3">
+                    <label for="denyReasonType" class="form-label">Type of reason:</label>
+                    <select class="form-select mb-3" id="denyReasonType" onchange="handleReasonTypeChange()">
+                        <option value="">Select a reason type...</option>
+                        <option value="Schedule Conflict">Schedule Conflict</option>
+                        <option value="Personal Reason">Personal Reason</option>
+                        <option value="Academic Commitment">Academic Commitment</option>
+                        <option value="Health Related">Health Related</option>
+                        <option value="Other">Other</option>
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label for="denyReason" class="form-label">Detailed explanation:</label>
+                    <textarea class="form-control" id="denyReason" rows="3" required
+                        placeholder="Please provide specific details about why you cannot take this duty. This helps with future scheduling."></textarea>
+                    <div class="form-text text-muted">
+                        Your explanation helps administrators better understand your situation and plan future
+                        assignments.
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-danger" id="denySubmitBtn" onclick="denyDuty()">
+                    <i class="fas fa-times-circle"></i> <span id="denyBtnText">Submit Rejection</span>
+                    <span id="denyBtnSpinner" class="spinner-border spinner-border-sm d-none" role="status"></span>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h5>All Notifications</h5>
+    </div>
+    <div class="card-body">
+        {% if notifications %}
+        <div class="list-group">
+            {% for notification in notifications %}
+            <div class="list-group-item {{ 'bg-light' if notification.is_read else '' }}"
+                id="notification-{{ notification.id }}">
+                <div class="d-flex w-100 justify-content-between">
+                    <h6 class="mb-1">{{ notification.message }}</h6>
+                    <small class="text-muted">{{ notification.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</small>
+                </div>
+
+                <!-- Display action buttons for duty assignment notifications -->
+                {% if "duty" in notification.message.lower() and ("assigned" in notification.message.lower() or "duty
+                for" in notification.message.lower()) and not notification.is_read %}
+                <div class="mt-2">
+                    <!-- Pass notification_id and duty_id if available -->
+                    <button class="btn btn-sm btn-success"
+                        onclick="acceptDuty('{{ notification.id }}', '{{ notification.duty_id if notification.duty_id else 0 }}')">
+                        <i class="fas fa-check"></i> Accept
+                    </button>
+                    <button class="btn btn-sm btn-danger"
+                        onclick="showDenyModal('{{ notification.id }}', '{{ notification.duty_id if notification.duty_id else 0 }}')">
+                        <i class="fas fa-times"></i> Deny
+                    </button>
+                    {% if notification.duty_id %}
+                    <small class="text-muted ms-2"><i class="fas fa-info-circle"></i> Duty ID: {{ notification.duty_id
+                        }}</small>
+                    {% endif %}
+                </div>
+                {% endif %}
+
+                {% if not notification.is_read and not ("duty" in notification.message.lower() and "assigned" in
+                notification.message.lower()) %}
+                <button class="btn btn-sm btn-outline-primary mt-2" onclick="markAsRead('{{ notification.id }}')">
+                    <i class="fas fa-check-double"></i> Mark as Read
+                </button>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="text-center py-5">
+            <i class="fas fa-bell-slash fa-3x text-muted mb-3"></i>
+            <p class="text-muted">No notifications found.</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    function markAsRead(notificationId) {
+        console.log('Marking notification as read:', notificationId);
+
+        fetch(`/faculty/mark-notification-read/${notificationId}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            credentials: 'same-origin'
+        })
+            .then(response => response.json())
+            .then(data => {
+                console.log('Response data:', data);
+                if (data.success) {
+                    // Update UI without reloading
+                    const notificationElement = document.getElementById(`notification-${notificationId}`);
+                    if (notificationElement) {
+                        notificationElement.classList.add('bg-light');
+                        const acceptDenyButtons = notificationElement.querySelector('.btn-success, .btn-danger');
+                        if (acceptDenyButtons) {
+                            acceptDenyButtons.parentElement.remove();
+                        }
+                    }
+                    showFlashMessage('success', 'Notification marked as read');
+                } else {
+                    showFlashMessage('danger', data.error || 'An error occurred. Please try again.');
+                }
+            })
+            .catch(error => {
+                console.error('Error marking as read:', error);
+                showFlashMessage('danger', 'Failed to mark as read. Please try again.');
+            });
+    }
+
+    function acceptDuty(notificationId, dutyId) {
+        console.log('Accepting duty - Notification ID:', notificationId, 'Duty ID:', dutyId);
+
+        // Validate duty_id
+        if (!dutyId || dutyId == 0) {
+            console.warn('Duty ID is 0 or missing, will try with notification ID only');
+        }
+
+        const requestData = {
+            notification_id: notificationId,
+            duty_id: dutyId || 0,
+            response: 'accept',
+            reason: ''
+        };
+
+        console.log('Sending request data:', requestData);
+
+        // Show loading state
+        const originalButtonText = document.querySelector(`#notification-${notificationId} .btn-success`).innerHTML;
+        document.querySelector(`#notification-${notificationId} .btn-success`).innerHTML =
+            '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Accepting...';
+        document.querySelector(`#notification-${notificationId} .btn-success`).disabled = true;
+        document.querySelector(`#notification-${notificationId} .btn-danger`).disabled = true;
+
+        fetch('/faculty/respond-duty', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: JSON.stringify(requestData),
+            credentials: 'same-origin'
+        })
+            .then(response => {
+                console.log('Response status:', response.status);
+                return response.json().then(data => {
+                    return { status: response.status, data: data };
+                });
+            })
+            .then(result => {
+                console.log('Response data:', result.data);
+
+                // Restore button state
+                document.querySelector(`#notification-${notificationId} .btn-success`).innerHTML = originalButtonText;
+
+                if (result.data.success) {
+                    showFlashMessage('success', 'Duty accepted successfully!');
+
+                    // Update UI
+                    const notificationElement = document.getElementById(`notification-${notificationId}`);
+                    if (notificationElement) {
+                        notificationElement.classList.add('bg-light');
+                        const actionButtons = notificationElement.querySelector('.mt-2');
+                        if (actionButtons) {
+                            actionButtons.remove();
+                        }
+                    }
+
+                    // Optional: reload after delay
+                    // setTimeout(() => location.reload(), 1500);
+                } else {
+                    document.querySelector(`#notification-${notificationId} .btn-success`).disabled = false;
+                    document.querySelector(`#notification-${notificationId} .btn-danger`).disabled = false;
+                    showFlashMessage('danger', 'Failed to accept duty: ' + (result.data.error || 'Unknown error'));
+                }
+            })
+            .catch(error => {
+                console.error('Error accepting duty:', error);
+
+                // Restore button state
+                document.querySelector(`#notification-${notificationId} .btn-success`).innerHTML = originalButtonText;
+                document.querySelector(`#notification-${notificationId} .btn-success`).disabled = false;
+                document.querySelector(`#notification-${notificationId} .btn-danger`).disabled = false;
+
+                showFlashMessage('danger', 'Failed to accept duty. Please try from the dashboard instead.');
+            });
+    }
+
+    function showDenyModal(notificationId, dutyId) {
+        console.log('Opening deny modal - Notification ID:', notificationId, 'Duty ID:', dutyId);
+
+        // Store the notification info
+        document.getElementById('denyNotificationId').value = notificationId;
+        document.getElementById('denyDutyId').value = dutyId || 0;
+
+        // Clear previous inputs
+        document.getElementById('denyReasonType').value = '';
+        document.getElementById('denyReason').value = '';
+
+        const denyModal = new bootstrap.Modal(document.getElementById('denyDutyModal'));
+        denyModal.show();
+    }
+
+    function handleReasonTypeChange() {
+        const reasonType = document.getElementById('denyReasonType').value;
+        const reasonInput = document.getElementById('denyReason');
+
+        // Update placeholder based on selected reason type
+        switch (reasonType) {
+            case 'Schedule Conflict':
+                reasonInput.placeholder = 'Please specify the conflicting commitment (e.g. class timing, meeting, etc.)';
+                break;
+            case 'Personal Reason':
+                reasonInput.placeholder = 'Please provide a brief explanation of your personal commitment';
+                break;
+            case 'Academic Commitment':
+                reasonInput.placeholder = 'Please specify the academic commitment (e.g. paper submission, conference, etc.)';
+                break;
+            case 'Health Related':
+                reasonInput.placeholder = 'Please indicate any health-related constraints (no need for specific details)';
+                break;
+            case 'Other':
+                reasonInput.placeholder = 'Please explain your reason in detail';
+                break;
+            default:
+                reasonInput.placeholder = 'Please provide specific details about why you cannot take this duty';
+        }
+    }
+
+    function denyDuty() {
+        console.log('Denying duty...');
+        const notificationId = document.getElementById('denyNotificationId').value;
+        const dutyId = document.getElementById('denyDutyId').value;
+        const reasonType = document.getElementById('denyReasonType').value;
+        const detailedReason = document.getElementById('denyReason').value.trim();
+
+        console.log('Notification ID:', notificationId);
+        console.log('Duty ID:', dutyId);
+        console.log('Reason Type:', reasonType);
+        console.log('Detailed Reason:', detailedReason);
+
+        if (!reasonType) {
+            showFlashMessage('warning', 'Please select a reason type.');
+            return;
+        }
+
+        if (!detailedReason) {
+            showFlashMessage('warning', 'Please provide details about your reason for denying the duty.');
+            return;
+        }
+
+        const formattedReason = `Type: ${reasonType}\nDetails: ${detailedReason}`;
+
+        // Show loading state
+        const submitButton = document.getElementById('denySubmitBtn');
+        const submitText = document.getElementById('denyBtnText');
+        const submitSpinner = document.getElementById('denyBtnSpinner');
+
+        submitButton.disabled = true;
+        submitText.textContent = 'Submitting...';
+        submitSpinner.classList.remove('d-none');
+
+        // Build request data
+        const requestData = {
+            notification_id: notificationId,
+            duty_id: dutyId || 0,
+            response: 'deny',
+            reason: formattedReason
+        };
+
+        console.log('Sending request data:', requestData);
+
+        fetch('/faculty/respond-duty', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: JSON.stringify(requestData),
+            credentials: 'same-origin'
+        })
+            .then(response => {
+                console.log('Response status:', response.status);
+                return response.json().then(data => {
+                    return { status: response.status, data: data };
+                });
+            })
+            .then(result => {
+                console.log('Response data:', result.data);
+
+                // Reset button state
+                submitButton.disabled = false;
+                submitText.textContent = 'Submit Rejection';
+                submitSpinner.classList.add('d-none');
+
+                if (result.data.success) {
+                    showFlashMessage('success', 'Duty declined successfully. Administrator has been notified.');
+                    bootstrap.Modal.getInstance(document.getElementById('denyDutyModal')).hide();
+
+                    // Update UI
+                    const notificationElement = document.getElementById(`notification-${notificationId}`);
+                    if (notificationElement) {
+                        notificationElement.classList.add('bg-light');
+                        const actionButtons = notificationElement.querySelector('.mt-2');
+                        if (actionButtons) {
+                            actionButtons.remove();
+                        }
+                    }
+                } else {
+                    showFlashMessage('danger', result.data.error || 'Failed to submit rejection');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+
+                // Reset button state
+                submitButton.disabled = false;
+                submitText.textContent = 'Submit Rejection';
+                submitSpinner.classList.add('d-none');
+
+                showFlashMessage('danger', 'Error submitting rejection: ' + error.message);
+            });
+    }
+
+    // Helper function to show flash messages
+    function showFlashMessage(type, message) {
+        // Remove any existing flash messages
+        const existingAlerts = document.querySelectorAll('.alert.position-fixed');
+        existingAlerts.forEach(alert => alert.remove());
+
+        // Create alert element
+        const alertDiv = document.createElement('div');
+        alertDiv.className = `alert alert-${type} alert-dismissible fade show position-fixed`;
+        alertDiv.style.cssText = `
+            top: 20px;
+            right: 20px;
+            z-index: 9999;
+            max-width: 400px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        `;
+        alertDiv.innerHTML = `
+            ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        `;
+
+        // Add to body
+        document.body.appendChild(alertDiv);
+
+        // Auto remove after 5 seconds
+        setTimeout(() => {
+            if (alertDiv.parentNode) {
+                alertDiv.remove();
+            }
+        }, 5000);
+    }
+
+    // Initialize when page loads
+    document.addEventListener('DOMContentLoaded', function () {
+        console.log('Notifications page loaded');
+
+        // Log all notification data for debugging
+        {% if notifications %}
+        console.log('Notifications data:', {{ notifications| tojson | safe }});
+    {% endif %}
+    });
+</script>
+
+<style>
+    .list-group-item {
+        transition: all 0.3s ease;
+    }
+
+    .list-group-item:hover {
+        transform: translateX(5px);
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+
+    .btn-sm {
+        padding: 0.25rem 0.5rem;
+        font-size: 0.875rem;
+    }
+
+    .position-fixed {
+        animation: slideIn 0.3s ease-out;
+    }
+
+    @keyframes slideIn {
+        from {
+            transform: translateX(100%);
+            opacity: 0;
+        }
+
+        to {
+            transform: translateX(0);
+            opacity: 1;
+        }
+    }
+</style>
+{% endblock %}

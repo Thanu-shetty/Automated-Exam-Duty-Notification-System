@@ -1,0 +1,755 @@
+{% extends "base.html" %}
+
+{% block title %}Admin Dashboard - Exam Duty System{% endblock %}
+
+{% block navbar %}
+<nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+    <div class="container">
+        <a class="navbar-brand" href="#">Exam Duty System</a>
+        <div class="navbar-nav ms-auto">
+            <a class="nav-link active" href="{{ url_for('admin_dashboard') }}">Overview</a>
+            <a class="nav-link" href="{{ url_for('upload_data') }}">Upload Data</a>
+            <a class="nav-link" href="{{ url_for('duty_management') }}">Duty Management</a>
+            <a class="nav-link" href="{{ url_for('logout') }}">Logout</a>
+        </div>
+    </div>
+</nav>
+{% endblock %}
+
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Flash Messages -->
+    <div id="flashMessages"></div>
+
+    <h1 class="mb-4">Admin Dashboard</h1>
+
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card text-white bg-primary">
+                <div class="card-body">
+                    <h4 class="card-title">{{ total_faculty }}</h4>
+                    <p class="card-text">Total Faculty</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-white bg-success">
+                <div class="card-body">
+                    <h4 class="card-title">{{ total_exams }}</h4>
+                    <p class="card-text">Total Exams</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-white bg-warning">
+                <div class="card-body">
+                    <h4 class="card-title">{{ pending_swaps }}</h4>
+                    <p class="card-text">Pending Swap Requests</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-white bg-info">
+                <div class="card-body">
+                    <h4 class="card-title">{{ recent_duties|length }}</h4>
+                    <p class="card-text">Recent Duties</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Recent Duties -->
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">Recent Duty Assignments</h5>
+                    <span class="badge bg-light text-primary" id="recentCount">{{ recent_duties|length }}</span>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>Faculty</th>
+                                    <th>Exam Date</th>
+                                    <th>Subject</th>
+                                    <th>Hall</th>
+                                    <th>Status</th>
+                                    <!-- REMOVED Actions column -->
+                                </tr>
+                            </thead>
+                            <tbody id="recentDutiesTable">
+                                {% for duty in recent_duties %}
+                                <tr>
+                                    <td>{{ duty.faculty.name if duty.faculty else 'N/A' }}</td>
+                                    <td>{{ duty.exam.exam_date if duty.exam else 'N/A' }}</td>
+                                    <td>{{ duty.exam.subject_name if duty.exam else 'N/A' }}</td>
+                                    <td>{{ duty.exam.hall if duty.exam else 'N/A' }}</td>
+                                    <td>
+                                        <span
+                                            class="badge bg-{{ 'success' if duty.status == 'Accepted' else 'warning' if duty.status == 'Assigned' else 'danger' }}">
+                                            {{ duty.status }}
+                                        </span>
+                                    </td>
+                                    <!-- REMOVED Delete button -->
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <!-- Declined Duties Card -->
+            <div class="card mb-4">
+                <div class="card-header bg-danger text-white d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">Recent Declined Duties</h5>
+                    <span class="badge bg-light text-danger" id="declinedCount">Loading...</span>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Faculty</th>
+                                    <th>Subject</th>
+                                    <th>Date</th>
+                                    <th>Reason Type</th>
+                                    <th>Details</th>
+                                </tr>
+                            </thead>
+                            <tbody id="declinedDutiesTable">
+                                <tr>
+                                    <td colspan="5" class="text-center">Loading declined duties...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quick Actions Card -->
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">Quick Actions</h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-grid gap-2">
+                        <a href="{{ url_for('upload_data') }}" class="btn btn-primary">
+                            <i class="fas fa-upload"></i> Upload Data
+                        </a>
+                        <a href="{{ url_for('duty_management') }}" class="btn btn-success">
+                            <i class="fas fa-tasks"></i> Manage Duties
+                        </a>
+                        <a href="#" onclick="checkNotifications()" class="btn btn-info">
+                            <i class="fas fa-bell"></i> Check Notifications
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Swap Requests -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-warning text-dark d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">Recent Swap Requests</h5>
+                    <span class="badge bg-light text-dark">{{ pending_swaps }} Pending</span>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>Requester</th>
+                                    <th>Requested Faculty</th>
+                                    <th>Exam</th>
+                                    <th>Date</th>
+                                    <th>Status</th>
+                                    <th>Date Requested</th>
+                                    <th>Notes</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% if recent_swaps %}
+                                {% for swap in recent_swaps %}
+                                <tr>
+                                    <td>{{ swap.requester_faculty.name }}</td>
+                                    <td>{{ swap.requested_faculty.name }}</td>
+                                    <td>
+                                        {% if swap.requester_duty and swap.requester_duty.exam %}
+                                        {{ swap.requester_duty.exam.subject_name }}
+                                        {% else %}
+                                        <span class="text-muted">N/A</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if swap.requester_duty and swap.requester_duty.exam %}
+                                        {{ swap.requester_duty.exam.exam_date }}
+                                        {% else %}
+                                        <span class="text-muted">N/A</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <span
+                                            class="badge bg-{{ 'warning' if swap.status == 'Pending' else 'success' if swap.status == 'Accepted' else 'danger' }}">
+                                            {{ swap.status }}
+                                        </span>
+                                    </td>
+                                    <td>{{ swap.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                                    <td>
+                                        {% if swap.notes %}
+                                        <button type="button" class="btn btn-sm btn-outline-info"
+                                            data-bs-toggle="popover" title="Swap Notes"
+                                            data-bs-content="{{ swap.notes }}">
+                                            View
+                                        </button>
+                                        {% else %}
+                                        <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                                {% else %}
+                                <tr>
+                                    <td colspan="7" class="text-center text-muted">No recent swap requests found</td>
+                                </tr>
+                                {% endif %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- Faculty Details Section -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header bg-info text-white">
+                        <h5 class="mb-0"><i class="fas fa-chalkboard-teacher me-2"></i>Faculty Directory & Timetables
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row mb-4">
+                            <div class="col-md-4">
+                                <label class="form-label">Filter by Department</label>
+                                <select class="form-select" id="facultyDeptFilter" onchange="loadFacultyList()">
+                                    <option value="">All Departments</option>
+                                    <!-- Populated dynamically -->
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Select Faculty</label>
+                                <select class="form-select" id="facultySelect" onchange="loadFacultyDetails()" disabled>
+                                    <option value="">-- Select Faculty --</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div id="facultyDetailsContainer" style="display: none;">
+                            <div class="row">
+                                <!-- Profile Card -->
+                                <div class="col-md-4">
+                                    <div class="card mb-3">
+                                        <div class="card-body text-center">
+                                            <img id="detailPhoto" src="" class="rounded-circle mb-3"
+                                                style="width: 100px; height: 100px; object-fit: cover;">
+                                            <h5 class="card-title" id="detailName"></h5>
+                                            <p class="text-muted mb-1" id="detailDept"></p>
+                                            <p class="text-muted mb-1" id="detailEmail"></p>
+                                            <p class="mb-0"><strong>ID:</strong> <span id="detailID"></span></p>
+                                        </div>
+                                        <ul class="list-group list-group-flush">
+                                            <li
+                                                class="list-group-item d-flex justify-content-between align-items-center">
+                                                Total Duties
+                                                <span class="badge bg-primary rounded-pill" id="statTotal">0</span>
+                                            </li>
+                                            <li
+                                                class="list-group-item d-flex justify-content-between align-items-center">
+                                                Completed
+                                                <span class="badge bg-success rounded-pill" id="statCompleted">0</span>
+                                            </li>
+                                            <li
+                                                class="list-group-item d-flex justify-content-between align-items-center">
+                                                Pending
+                                                <span class="badge bg-warning text-dark rounded-pill"
+                                                    id="statPending">0</span>
+                                            </li>
+                                        </ul>
+                                    </div>
+                                </div>
+
+                                <!-- Timetable & Duties -->
+                                <div class="col-md-8">
+                                    <!-- Timetable -->
+                                    <div class="card mb-3">
+                                        <div class="card-header">
+                                            <h6 class="mb-0">Weekly Timetable (Time Constraints)</h6>
+                                        </div>
+                                        <div class="card-body p-0">
+                                            <div class="table-responsive">
+                                                <table class="table table-sm table-bordered m-0">
+                                                    <thead class="table-light">
+                                                        <tr>
+                                                            <th>Day</th>
+                                                            <th>Start</th>
+                                                            <th>End</th>
+                                                            <th>Activity</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody id="detailTimetableBody">
+                                                        <!-- Dynamics -->
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Recent Duties -->
+                                    <div class="card">
+                                        <div class="card-header">
+                                            <h6 class="mb-0">Recent Exam Duties</h6>
+                                        </div>
+                                        <div class="card-body p-0">
+                                            <div class="table-responsive">
+                                                <table class="table table-sm m-0">
+                                                    <thead>
+                                                        <tr>
+                                                            <th>Date</th>
+                                                            <th>Subject</th>
+                                                            <th>Status</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody id="detailDutiesBody">
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div id="facultyLoading" class="text-center py-5" style="display: none;">
+                            <div class="spinner-border text-primary" role="status"></div>
+                            <p class="mt-2">Loading details...</p>
+                        </div>
+
+                        <div id="facultyPlaceholder" class="text-center py-5 text-muted">
+                            <i class="fas fa-user-friends fa-3x mb-3"></i>
+                            <p>Select a faculty member to view their full details, timetable, and duty history.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Reminder Settings Modal -->
+    <div class="modal fade" id="reminderModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Reminder Settings</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="reminderForm">
+                        <div class="mb-3">
+                            <label class="form-label">Send reminders before exam:</label>
+                            <input type="text" class="form-control" name="reminders" value="1 hour,30 minutes,5 minutes"
+                                placeholder="e.g., 1 hour,30 minutes,5 minutes">
+                            <div class="form-text">Enter comma-separated time intervals</div>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    <button type="button" class="btn btn-primary" onclick="updateReminderSettings()">Save
+                        Settings</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Reason Details Modal -->
+    <div class="modal fade" id="reasonDetailsModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Duty Rejection Details</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p><strong>Faculty:</strong> <span id="detailFaculty"></span></p>
+                    <p><strong>Exam:</strong> <span id="detailExam"></span></p>
+                    <p><strong>Detailed Reason:</strong></p>
+                    <div class="alert alert-info" id="detailReason"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- REMOVED Delete Confirmation Modal since we don't need it on dashboard -->
+    {% endblock %}
+
+    {% block scripts %}
+    <script>
+        // Flash message handler
+        function showAlert(message, type = 'info') {
+            const alertTypes = {
+                'success': 'alert-success',
+                'error': 'alert-danger',
+                'warning': 'alert-warning',
+                'info': 'alert-info'
+            };
+
+            const alertClass = alertTypes[type] || 'alert-info';
+
+            const alertDiv = document.createElement('div');
+            alertDiv.className = `alert ${alertClass} alert-dismissible fade show`;
+            alertDiv.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+
+            const container = document.querySelector('.container-fluid') || document.body;
+            const flashContainer = document.getElementById('flashMessages');
+
+            if (flashContainer) {
+                flashContainer.appendChild(alertDiv);
+            } else {
+                container.insertBefore(alertDiv, container.firstChild);
+            }
+
+            // Auto remove after 5 seconds
+            setTimeout(() => {
+                if (alertDiv.parentElement) {
+                    alertDiv.remove();
+                }
+            }, 5000);
+        }
+
+        // Reminder settings
+        function updateReminderSettings() {
+            const formData = new FormData(document.getElementById('reminderForm'));
+
+            fetch('/admin/reminder-settings', {
+                method: 'POST',
+                credentials: 'include',
+                body: formData
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        showAlert('Reminder settings updated successfully!', 'success');
+                        const modal = bootstrap.Modal.getInstance(document.getElementById('reminderModal'));
+                        if (modal) modal.hide();
+                    } else {
+                        showAlert('Error updating reminder settings', 'error');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error updating reminder settings:', error);
+                    showAlert('Error updating reminder settings', 'error');
+                });
+        }
+
+        // Recent duties functions
+        function renderRecentDuties(duties) {
+            const tbody = document.getElementById('recentDutiesTable');
+            const countBadge = document.getElementById('recentCount');
+
+            if (!tbody) return;
+
+            if (!duties || duties.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">No recent duties</td></tr>';
+                if (countBadge) countBadge.textContent = '0';
+                return;
+            }
+
+            if (countBadge) countBadge.textContent = duties.length;
+
+            let html = '';
+            duties.forEach(d => {
+                const statusClass = d.status === 'Accepted' ? 'success' :
+                    d.status === 'Assigned' ? 'warning' : 'danger';
+
+                html += `
+            <tr>
+                <td>${d.faculty || 'N/A'}</td>
+                <td>${d.date || 'N/A'}</td>
+                <td>${d.exam || 'N/A'}</td>
+                <td>${d.hall || 'N/A'}</td>
+                <td>
+                    <span class="badge bg-${statusClass}">${d.status}</span>
+                </td>
+            </tr>
+        `;
+            });
+
+            tbody.innerHTML = html;
+        }
+
+        function fetchRecentDuties() {
+            fetch('/admin/recent-duties', { credentials: 'include' })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Network response was not ok');
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    if (Array.isArray(data)) {
+                        renderRecentDuties(data);
+                    } else if (data.error) {
+                        console.error('Error from server:', data.error);
+                    }
+                })
+                .catch(err => {
+                    console.error('Error fetching recent duties:', err);
+                    showAlert('Error loading recent duties', 'error');
+                });
+        }
+
+        // Declined duties functions
+        function renderDeclinedDuties(duties) {
+            const tbody = document.getElementById('declinedDutiesTable');
+            const countBadge = document.getElementById('declinedCount');
+
+            if (!tbody || !duties) return;
+
+            if (duties.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">No declined duties in the last 30 days</td></tr>';
+                if (countBadge) countBadge.textContent = '0';
+                return;
+            }
+
+            if (countBadge) countBadge.textContent = duties.length;
+
+            let html = '';
+            duties.forEach(duty => {
+                const reasonTypeClass = {
+                    'schedule_conflict': 'text-warning',
+                    'personal': 'text-info',
+                    'academic': 'text-primary',
+                    'health': 'text-danger',
+                    'other': 'text-secondary'
+                }[duty.reason_type ? duty.reason_type.toLowerCase() : 'other'] || 'text-muted';
+
+                html += `
+            <tr>
+                <td>${duty.faculty || 'N/A'}</td>
+                <td>${duty.exam || 'N/A'}</td>
+                <td>${duty.date || 'N/A'}</td>
+                <td class="${reasonTypeClass}">${duty.reason_type || 'Not specified'}</td>
+                <td>
+                    <button class="btn btn-sm btn-outline-info" 
+                            onclick="showReasonDetails('${(duty.faculty || 'N/A').replace(/'/g, "\\'")}', 
+                                                      '${(duty.exam || 'N/A').replace(/'/g, "\\'")}', 
+                                                      '${(duty.details || 'No details provided').replace(/'/g, "\\'")}')">
+                        View Details
+                    </button>
+                </td>
+            </tr>
+        `;
+            });
+            tbody.innerHTML = html;
+        }
+
+        function showReasonDetails(faculty, exam, details) {
+            document.getElementById('detailFaculty').textContent = faculty;
+            document.getElementById('detailExam').textContent = exam;
+            document.getElementById('detailReason').textContent = details;
+
+            const modal = new bootstrap.Modal(document.getElementById('reasonDetailsModal'));
+            modal.show();
+        }
+
+        function fetchDeclinedDuties() {
+            fetch('/admin/declined-duties', { credentials: 'include' })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Network response was not ok');
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    if (Array.isArray(data)) {
+                        renderDeclinedDuties(data);
+                    } else if (data.error) {
+                        console.error('Error from server:', data.error);
+                    }
+                })
+                .catch(err => {
+                    console.error('Error fetching declined duties:', err);
+                    showAlert('Error loading declined duties', 'error');
+                });
+        }
+
+        // Faculty Directory Functions
+        function loadFacultyList() {
+            const dept = document.getElementById('facultyDeptFilter').value;
+            const select = document.getElementById('facultySelect');
+
+            select.innerHTML = '<option value="">Loading...</option>';
+            select.disabled = true;
+
+            fetch(`/admin/get-faculty-list?department=${encodeURIComponent(dept)}`)
+                .then(res => res.json())
+                .then(data => {
+                    select.innerHTML = '<option value="">-- Select Faculty --</option>';
+                    data.forEach(fac => {
+                        const option = document.createElement('option');
+                        option.value = fac.id;
+                        option.textContent = `${fac.name} (${fac.department})`;
+                        select.appendChild(option);
+                    });
+                    select.disabled = false;
+                })
+                .catch(err => {
+                    console.error("Error loading faculty list:", err);
+                    select.innerHTML = '<option value="">Error loading list</option>';
+                });
+        }
+
+        function loadFacultyDetails() {
+            const id = document.getElementById('facultySelect').value;
+            if (!id) {
+                document.getElementById('facultyDetailsContainer').style.display = 'none';
+                document.getElementById('facultyPlaceholder').style.display = 'block';
+                return;
+            }
+
+            document.getElementById('facultyPlaceholder').style.display = 'none';
+            document.getElementById('facultyDetailsContainer').style.display = 'none';
+            document.getElementById('facultyLoading').style.display = 'block';
+
+            fetch(`/admin/get-faculty-details/${id}`)
+                .then(res => res.json())
+                .then(data => {
+                    if (data.error) {
+                        showAlert('Error: ' + data.error, 'error');
+                        return;
+                    }
+
+                    // Populate Profile
+                    document.getElementById('detailPhoto').src = data.profile_image || '/static/profile_pics/default.png';
+                    document.getElementById('detailName').textContent = data.name;
+                    document.getElementById('detailDept').textContent = data.department;
+                    document.getElementById('detailEmail').textContent = data.email;
+                    document.getElementById('detailID').textContent = data.faculty_id;
+
+                    // Populate Stats
+                    document.getElementById('statTotal').textContent = data.stats.total;
+                    document.getElementById('statCompleted').textContent = data.stats.completed;
+                    document.getElementById('statPending').textContent = data.stats.pending;
+
+                    // Populate Timetable
+                    const timetableInfo = document.getElementById('detailTimetableBody');
+                    timetableInfo.innerHTML = '';
+                    if (data.timetable.length === 0) {
+                        timetableInfo.innerHTML = '<tr><td colspan="4" class="text-center text-muted">No timetable entries found</td></tr>';
+                    } else {
+                        data.timetable.forEach(t => {
+                            timetableInfo.innerHTML += `
+                            <tr>
+                                <td>${t.day}</td>
+                                <td>${t.start}</td>
+                                <td>${t.end}</td>
+                                <td>${t.subject || '-'}</td>
+                            </tr>
+                        `;
+                        });
+                    }
+
+                    // Populate Duties
+                    const dutiesInfo = document.getElementById('detailDutiesBody');
+                    dutiesInfo.innerHTML = '';
+                    if (data.recent_duties.length === 0) {
+                        dutiesInfo.innerHTML = '<tr><td colspan="3" class="text-center text-muted">No duties found</td></tr>';
+                    } else {
+                        data.recent_duties.forEach(d => {
+                            const badge = d.status === 'Accepted' ? 'success' : d.status === 'Assigned' ? 'warning' : 'danger';
+                            dutiesInfo.innerHTML += `
+                            <tr>
+                                <td>${d.date}</td>
+                                <td>${d.subject}</td>
+                                <td><span class="badge bg-${badge}">${d.status}</span></td>
+                            </tr>
+                        `;
+                        });
+                    }
+
+                    document.getElementById('facultyLoading').style.display = 'none';
+                    document.getElementById('facultyDetailsContainer').style.display = 'block';
+                })
+                .catch(err => {
+                    console.error("Error details:", err);
+                    document.getElementById('facultyLoading').style.display = 'none';
+                    showAlert('Failed to load faculty details', 'error');
+                });
+        }
+
+        // Populate department filter on load
+        function loadDepartments() {
+            fetch('/admin/get-departments')
+                .then(res => res.json())
+                .then(data => {
+                    const select = document.getElementById('facultyDeptFilter');
+                    data.forEach(dept => {
+                        const opt = document.createElement('option');
+                        opt.value = dept;
+                        opt.textContent = dept;
+                        select.appendChild(opt);
+                    });
+                })
+                .catch(console.error);
+        }
+        // Initialize the dashboard
+        document.addEventListener('DOMContentLoaded', function () {
+            console.log('Admin dashboard initialized');
+
+            // Load dynamic dropdowns
+            loadDepartments();
+            loadFacultyList(); // Load initial full list
+
+            // Initialize Popovers
+            var popoverTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="popover"]'))
+            var popoverList = popoverTriggerList.map(function (popoverTriggerEl) {
+                return new bootstrap.Popover(popoverTriggerEl)
+            })
+
+            // Initial load of dynamic data
+            fetchRecentDuties();
+            fetchDeclinedDuties();
+
+            // Poll every 30 seconds for updates (less frequent to reduce server load)
+            setInterval(() => {
+                fetchRecentDuties();
+                fetchDeclinedDuties();
+            }, 30000);
+
+            // Handle any existing flash messages from Flask
+            const flaskFlashes = document.querySelectorAll('.alert');
+            flaskFlashes.forEach(flash => {
+                setTimeout(() => {
+                    if (flash.parentElement) {
+                        const bsAlert = new bootstrap.Alert(flash);
+                        bsAlert.close();
+                    }
+                }, 5000);
+            });
+        });
+    </script>
+    {% endblock %}

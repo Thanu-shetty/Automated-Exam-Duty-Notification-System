@@ -1,0 +1,382 @@
+{% extends "base.html" %}
+
+{% block title %}My Profile - Exam Duty System{% endblock %}
+
+{% block navbar %}
+<nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+    <div class="container">
+        <a class="navbar-brand" href="#">Exam Duty System</a>
+        <div class="navbar-nav ms-auto">
+            <a class="nav-link" href="{{ url_for('faculty_dashboard') }}">My Duties</a>
+            <a class="nav-link" href="{{ url_for('faculty_notifications') }}">Notifications</a>
+            <a class="nav-link active" href="{{ url_for('faculty_profile') }}">Profile</a>
+            <a class="nav-link" href="{{ url_for('logout') }}">Logout</a>
+        </div>
+    </div>
+</nav>
+{% endblock %}
+
+{% block content %}
+<h1 class="mb-4">My Profile</h1>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+{% if messages %}
+{% for category, message in messages %}
+<div class="alert alert-{{ category if category != 'danger' else 'danger' }} alert-dismissible fade show" role="alert">
+    {{ message }}
+    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+</div>
+{% endfor %}
+{% endif %}
+{% endwith %}
+
+<div class="row">
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h5>Profile Picture</h5>
+            </div>
+            <div class="card-body text-center">
+                <!-- FIXED: Use the profile_image_url passed from the route -->
+                {% if profile_image_url %}
+                <img src="{{ profile_image_url }}" alt="Profile Picture"
+                    class="img-fluid rounded-circle mb-3 profile-picture" id="profilePicture"
+                    style="width: 150px; height: 150px; object-fit: cover;">
+                {% else %}
+                <!-- Fallback in case profile_image_url is not available -->
+                <img src="{{ url_for('static', filename='profile_pics/' + (current_user.profile_image or 'default.png')) }}"
+                    alt="Profile Picture" class="img-fluid rounded-circle mb-3 profile-picture" id="profilePicture"
+                    style="width: 150px; height: 150px; object-fit: cover;">
+                {% endif %}
+
+                <!-- AJAX upload form for better user experience -->
+                <form id="profilePhotoForm" method="POST" enctype="multipart/form-data">
+                    <input type="hidden" name="action" value="upload_photo">
+                    <div class="mb-3">
+                        <label for="profile_photo" class="form-label">Change Photo</label>
+                        <input class="form-control" type="file" id="profile_photo" name="profile_photo"
+                            accept="image/png, image/jpeg, image/jpg" required>
+                        <div class="form-text">
+                            Accepted formats: PNG, JPG, JPEG (Max: 5MB)
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-sm" id="uploadBtn">
+                        <span id="uploadText">Upload</span>
+                        <span id="uploadSpinner" class="spinner-border spinner-border-sm d-none" role="status"></span>
+                    </button>
+                </form>
+
+                <!-- Alternative direct upload form (kept as backup) -->
+                <form action="{{ url_for('faculty_profile') }}" method="POST" enctype="multipart/form-data"
+                    class="mt-3 d-none">
+                    <input type="hidden" name="action" value="upload_photo">
+                    <div class="mb-3">
+                        <label for="profile_photo_direct" class="form-label">Upload Direct</label>
+                        <input class="form-control" type="file" id="profile_photo_direct" name="profile_photo"
+                            accept="image/png, image/jpeg">
+                    </div>
+                    <button type="submit" class="btn btn-outline-primary btn-sm">Direct Upload</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h5>My Details</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <p><strong>Faculty ID:</strong> {{ current_user.faculty_id }}</p>
+                        <p><strong>Name:</strong> {{ current_user.name }}</p>
+                    </div>
+                    <div class="col-md-6">
+                        <p><strong>Email:</strong> {{ current_user.email }}</p>
+                        <p><strong>Department:</strong> {{ current_user.department }}</p>
+                    </div>
+                </div>
+                <div class="row mt-3">
+                    <div class="col-12">
+                        <p><strong>Profile Picture Status:</strong>
+                            {% if current_user.profile_image and current_user.profile_image != 'default.png' %}
+                            <span class="badge bg-success">Custom Photo Uploaded</span>
+                            {% else %}
+                            <span class="badge bg-info">Using Default Photo</span>
+                            {% endif %}
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mt-4">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0">📅 Upload Weekly Timetable</h5>
+            </div>
+            <div class="card-body">
+                <p>Upload your weekly class schedule to help us avoid assigning exam duties during your busy hours.
+                    This is essential if you handle classes from different departments.
+                </p>
+
+                <div class="alert alert-light border">
+                    <h6><i class="fas fa-info-circle"></i> CSV Format Instructions:</h6>
+                    <p class="mb-2 small">Your CSV file must have the following columns:</p>
+                    <code class="d-block mb-3 p-2 bg-light">day_of_week, start_time, end_time, subject</code>
+                    <ul class="small mb-0 text-muted">
+                        <li><strong>day_of_week:</strong> Monday, Tuesday, etc.</li>
+                        <li><strong>start_time:</strong> HH:MM (24-hour format, e.g., 09:00, 14:30)</li>
+                        <li><strong>end_time:</strong> HH:MM (24-hour format, e.g., 10:00, 15:30)</li>
+                        <li><strong>subject:</strong> (Optional) Class name or Activity details</li>
+                    </ul>
+                </div>
+
+                <form id="timetableUploadForm" method="POST" enctype="multipart/form-data">
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Select CSV File</label>
+                        <input type="file" class="form-control" name="file" accept=".csv" required>
+                    </div>
+                    <button type="submit" class="btn btn-info text-white">
+                        <i class="fas fa-upload"></i> Upload Schedule
+                    </button>
+                    <a href="{{ url_for('download_timetable_template') }}" class="btn btn-outline-secondary ms-2">
+                        <i class="fas fa-download"></i> Download Template
+                    </a>
+                </form>
+            </div>
+        </div>
+
+        <div class="card mt-4">
+            <div class="card-header">
+                <h5>Change Password</h5>
+            </div>
+            <div class="card-body">
+                <form action="{{ url_for('faculty_profile') }}" method="POST" id="passwordForm">
+                    <input type="hidden" name="action" value="change_password">
+                    <div class="mb-3">
+                        <label for="current_password" class="form-label">Current Password</label>
+                        <input type="password" class="form-control" id="current_password" name="current_password"
+                            required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="new_password" class="form-label">New Password</label>
+                        <input type="password" class="form-control" id="new_password" name="new_password"
+                            pattern=".{6,}" title="Password must be at least 6 characters" required>
+                        <div class="form-text">Password must be at least 6 characters long</div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="confirm_password" class="form-label">Confirm New Password</label>
+                        <input type="password" class="form-control" id="confirm_password" name="confirm_password"
+                            required>
+                        <div class="invalid-feedback" id="passwordMismatch">Passwords do not match</div>
+                    </div>
+                    <button type="submit" class="btn btn-success" id="updatePasswordBtn">Update Password</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // AJAX photo upload
+    document.getElementById('profilePhotoForm').addEventListener('submit', function (e) {
+        e.preventDefault();
+
+        const formData = new FormData(this);
+        const uploadBtn = document.getElementById('uploadBtn');
+        const uploadText = document.getElementById('uploadText');
+        const uploadSpinner = document.getElementById('uploadSpinner');
+        const profilePicture = document.getElementById('profilePicture');
+
+        // Show loading state
+        uploadText.classList.add('d-none');
+        uploadSpinner.classList.remove('d-none');
+        uploadBtn.disabled = true;
+
+        // Use AJAX endpoint for upload
+        fetch('{{ url_for("upload_profile_photo_ajax") }}', {
+            method: 'POST',
+            body: formData
+        })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Show success message
+                    showAlert('success', data.message);
+
+                    // Update profile picture with cache busting
+                    if (data.profile_image_url) {
+                        // Add timestamp to prevent caching
+                        const timestamp = new Date().getTime();
+                        const separator = data.profile_image_url.includes('?') ? '&' : '?';
+                        profilePicture.src = data.profile_image_url + separator + 't=' + timestamp;
+                    }
+
+                    // Reset form
+                    document.getElementById('profile_photo').value = '';
+                } else {
+                    showAlert('danger', data.error || 'Upload failed');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                showAlert('danger', 'An error occurred during upload');
+            })
+            .finally(() => {
+                // Reset button state
+                uploadText.classList.remove('d-none');
+                uploadSpinner.classList.add('d-none');
+                uploadBtn.disabled = false;
+            });
+    });
+
+    // Password validation
+    document.getElementById('passwordForm').addEventListener('submit', function (e) {
+        const newPassword = document.getElementById('new_password').value;
+        const confirmPassword = document.getElementById('confirm_password').value;
+        const passwordMismatch = document.getElementById('passwordMismatch');
+
+        if (newPassword !== confirmPassword) {
+            e.preventDefault();
+            document.getElementById('confirm_password').classList.add('is-invalid');
+            passwordMismatch.style.display = 'block';
+            return false;
+        } else {
+            document.getElementById('confirm_password').classList.remove('is-invalid');
+            passwordMismatch.style.display = 'none';
+        }
+
+        // Show loading on password update
+        const updateBtn = document.getElementById('updatePasswordBtn');
+        updateBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Updating...';
+        updateBtn.disabled = true;
+    });
+
+    // Real-time password matching check
+    document.getElementById('confirm_password').addEventListener('input', function () {
+        const newPassword = document.getElementById('new_password').value;
+        const confirmPassword = this.value;
+
+        if (newPassword && confirmPassword && newPassword !== confirmPassword) {
+            this.classList.add('is-invalid');
+            document.getElementById('passwordMismatch').style.display = 'block';
+        } else {
+            this.classList.remove('is-invalid');
+            document.getElementById('passwordMismatch').style.display = 'none';
+        }
+    });
+
+    // Helper function to show alerts
+    function showAlert(type, message) {
+        const alertDiv = document.createElement('div');
+        alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
+        alertDiv.innerHTML = `
+            ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        `;
+
+        const container = document.querySelector('.container');
+        container.insertBefore(alertDiv, container.firstChild);
+
+        // Auto remove after 5 seconds
+        setTimeout(() => {
+            if (alertDiv.parentNode) {
+                alertDiv.remove();
+            }
+        }, 5000);
+    }
+
+    // Timetable CSV Upload
+    const timetableForm = document.getElementById('timetableUploadForm');
+    if (timetableForm) {
+        timetableForm.addEventListener('submit', function (e) {
+            e.preventDefault();
+
+            const formData = new FormData(this);
+            const btn = this.querySelector('button[type="submit"]');
+            const originalText = btn.innerHTML;
+
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Uploading...';
+            btn.disabled = true;
+
+            fetch("{{ url_for('faculty_upload_timetable') }}", {
+                method: 'POST',
+                body: formData
+            })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) {
+                        showAlert('success', data.message);
+                        this.reset();
+                    } else {
+                        showAlert('danger', data.error || 'Upload failed');
+                    }
+                })
+                .catch(err => {
+                    console.error(err);
+                    showAlert('danger', 'Network error occurred');
+                })
+                .finally(() => {
+                    btn.innerHTML = originalText;
+                    btn.disabled = false;
+                });
+        });
+    }
+
+    // Preview image before upload (optional enhancement)
+    document.getElementById('profile_photo').addEventListener('change', function (e) {
+        const file = e.target.files[0];
+        if (file) {
+            // Check file size (5MB max)
+            if (file.size > 5 * 1024 * 1024) {
+                showAlert('danger', 'File size must be less than 5MB');
+                this.value = '';
+                return;
+            }
+
+            // Check file type
+            const validTypes = ['image/jpeg', 'image/jpg', 'image/png'];
+            if (!validTypes.includes(file.type)) {
+                showAlert('danger', 'Only JPG, JPEG, and PNG files are allowed');
+                this.value = '';
+                return;
+            }
+
+            // Optional: Preview image
+            const reader = new FileReader();
+            reader.onload = function (event) {
+                document.getElementById('profilePicture').src = event.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
+    });
+</script>
+
+<style>
+    .profile-picture {
+        border: 3px solid #007bff;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        transition: transform 0.3s ease;
+    }
+
+    .profile-picture:hover {
+        transform: scale(1.05);
+    }
+
+    #uploadBtn:disabled {
+        cursor: not-allowed;
+        opacity: 0.6;
+    }
+
+    .form-control.is-invalid {
+        border-color: #dc3545;
+    }
+
+    #passwordMismatch {
+        display: none;
+    }
+</style>
+{% endblock %}

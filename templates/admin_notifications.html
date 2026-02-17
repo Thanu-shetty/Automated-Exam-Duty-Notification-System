@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+
+{% block title %}Admin Notifications - Exam Duty System{% endblock %}
+
+{% block navbar %}
+<nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+  <div class="container">
+    <a class="navbar-brand" href="{% url 'admin_dashboard' %}">Exam Duty System</a>
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+    <div class="collapse navbar-collapse" id="navbarNav">
+      <ul class="navbar-nav me-auto">
+        <li class="nav-item">
+          <a class="nav-link" href="{% url 'admin_dashboard' %}">Dashboard</a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link" href="{% url 'manage_faculties' %}">Manage Faculties</a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link" href="{% url 'manage_exam_duties' %}">Manage Exam Duties</a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link" href="{% url 'notifications' %}">Notifications</a>
+        </li>
+      </ul>
+      <ul class="navbar-nav">
+        <li class="nav-item">
+          <a class="nav-link" href="{% url 'logout' %}">Logout</a>
+        </li>
+      </ul>
+    </div>
+  </div>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+  <h2>Admin Notifications</h2>
+  
+  {% if notifications %}
+    <div class="row">
+      {% for notification in notifications %}
+        <div class="col-md-6 mb-3">
+          <div class="card">
+            <div class="card-body">
+              <h5 class="card-title">{{ notification.title }}</h5>
+              <p class="card-text">{{ notification.message }}</p>
+              <p class="card-text"><small class="text-muted">Sent at: {{ notification.timestamp }}</small></p>
+              
+              {% if notification.status == 'pending' %}
+                <form method="post" action="{% url 'handle_notification' notification.id %}" class="d-inline">
+                  {% csrf_token %}
+                  <input type="hidden" name="action" value="accept">
+                  <button type="submit" class="btn btn-success btn-sm">Accept</button>
+                </form>
+                <form method="post" action="{% url 'handle_notification' notification.id %}" class="d-inline">
+                  {% csrf_token %}
+                  <input type="hidden" name="action" value="deny">
+                  <button type="submit" class="btn btn-danger btn-sm">Deny</button>
+                </form>
+              {% elif notification.status == 'accepted' %}
+                <span class="badge bg-success">Accepted</span>
+              {% elif notification.status == 'denied' %}
+                <span class="badge bg-danger">Denied</span>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  {% else %}
+    <p>No notifications available.</p>
+  {% endif %}
+</div>
+{% endblock %}

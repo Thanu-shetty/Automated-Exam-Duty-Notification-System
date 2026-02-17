@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+
+{% block title %}Bulk Assignment - Exam Duty System{% endblock %}
+
+{% block navbar %}
+<nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+    <div class="container">
+        <a class="navbar-brand" href="#">Exam Duty System</a>
+        <div class="navbar-nav ms-auto">
+            <a class="nav-link" href="{{ url_for('admin_dashboard') }}">Overview</a>
+            <a class="nav-link" href="{{ url_for('upload_data') }}">Upload Data</a>
+            <a class="nav-link" href="{{ url_for('duty_management') }}">Duty Management</a>
+            <a class="nav-link active" href="{{ url_for('bulk_assign_duties') }}">Bulk Assignment</a>
+            <a class="nav-link" href="{{ url_for('logout') }}">Logout</a>
+        </div>
+    </div>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2>Bulk Duty Assignment</h2>
+    <div class="card">
+        <div class="card-body">
+            <form id="bulkAssignForm">
+                <div class="mb-3">
+                    <label for="departmentSelect" class="form-label">Select Department</label>
+                    <select class="form-select" id="departmentSelect" name="department" required>
+                        <option value="">Choose...</option>
+                        {% for dept in departments %}
+                        <option value="{{ dept }}">{{ dept }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label for="maxDuties" class="form-label">Max Duties per Faculty</label>
+                    <input type="number" class="form-control" id="maxDuties" name="max_duties" value="2" min="1">
+                </div>
+                <button type="button" class="btn btn-primary" onclick="runAutoAssign()">Run Auto-Assignment</button>
+            </form>
+        </div>
+    </div>
+    <div id="resultArea" class="mt-3"></div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    function runAutoAssign() {
+        const department = document.getElementById('departmentSelect').value;
+        const maxDuties = document.getElementById('maxDuties').value;
+
+        if (!department) {
+            alert('Please select a department');
+            return;
+        }
+
+        const btn = document.querySelector('button');
+        const originalText = btn.innerText;
+        btn.disabled = true;
+        btn.innerText = 'Processing...';
+
+        fetch('{{ url_for("auto_assign_duties") }}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token() if csrf_token else "" }}'
+            },
+            body: JSON.stringify({
+                department: department,
+                max_duties: maxDuties
+            })
+        })
+            .then(response => response.json())
+            .then(data => {
+                const resultArea = document.getElementById('resultArea');
+                if (data.success) {
+                    resultArea.innerHTML = `<div class="alert alert-success">${data.message}</div>`;
+                } else {
+                    resultArea.innerHTML = `<div class="alert alert-danger">Error: ${data.error}</div>`;
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                document.getElementById('resultArea').innerHTML = `<div class="alert alert-danger">Network error</div>`;
+            })
+            .finally(() => {
+                btn.disabled = false;
+                btn.innerText = originalText;
+            });
+    }
+</script>
+{% endblock %}

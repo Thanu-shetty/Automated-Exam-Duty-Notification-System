@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="card">
+        <div class="card-header">
+            <h3>Respond to Duty Assignment</h3>
+        </div>
+        <div class="card-body">
+            <div class="mb-3">
+                <h5>Exam Details:</h5>
+                <p><strong>Subject:</strong> {{ duty.exam.subject_name }}</p>
+                <p><strong>Date:</strong> {{ duty.exam.exam_date.strftime('%Y-%m-%d') }}</p>
+                <p><strong>Time:</strong> {{ duty.exam.start_time.strftime('%H:%M') }} - {{ duty.exam.end_time.strftime('%H:%M') }}</p>
+                <p><strong>Hall:</strong> {{ duty.exam.hall }}</p>
+            </div>
+
+            <form id="responseForm">
+                <input type="hidden" id="dutyId" value="{{ duty.id }}">
+                
+                <div class="mb-3">
+                    <label for="reason" class="form-label">Reason (optional for accept, required for decline):</label>
+                    <textarea class="form-control" id="reason" rows="3"></textarea>
+                </div>
+
+                <div class="mb-3">
+                    <button type="button" class="btn btn-success me-2" onclick="submitResponse('accept')">Accept Duty</button>
+                    <button type="button" class="btn btn-danger" onclick="submitResponse('reject')">Decline Duty</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+function submitResponse(action) {
+    const dutyId = document.getElementById('dutyId').value;
+    const reason = document.getElementById('reason').value;
+
+    if (action === 'reject' && !reason.trim()) {
+        alert('Please provide a reason for declining the duty');
+        return;
+    }
+
+    fetch('/faculty/respond-duty', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            duty_id: dutyId,
+            action: action,
+            reason: reason
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.message);
+            window.location.href = data.redirect;
+        } else {
+            alert(data.message || 'Error processing your response');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Error processing your response. Please try again.');
+    });
+}
+</script>
+{% endblock %}
