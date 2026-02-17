@@ -31,9 +31,9 @@ See their assigned exam duties
     Accept or decline the duty
     See notifications
 
+<img width="984" height="462" alt="image" src="https://github.com/user-attachments/assets/64b6277f-4f98-47b8-be3f-02e87f9c9ae4" />
 
-    <img width="782" height="375" alt="image" src="https://github.com/user-attachments/assets/de37d322-44a3-4b0a-81b0-b0eb9078d88a" />
-    
+  
     
 📧 Email Notifications
 
